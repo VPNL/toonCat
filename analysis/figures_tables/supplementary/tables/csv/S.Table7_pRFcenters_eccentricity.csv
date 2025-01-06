@@ -1,0 +1,45 @@
+"Analysis","model term","df1","df2","F.ratio","p.value"
+"LMM: pRF centers Eccentricity (Age Group)","group",1,61.32,0.387,0.536403061115358
+"LMM: pRF centers Eccentricity (Age Group)","stream",1,693.18,84.616,4.18497351659264e-19
+"LMM: pRF centers Eccentricity (Age Group)","category",2,685.49,6.213,0.00211733479636722
+"LMM: pRF centers Eccentricity (Age Group)","hemi",1,691.78,58.604,6.50133218979311e-14
+"LMM: pRF centers Eccentricity (Age Group)","group:stream",1,693.18,0.107,0.744189221716548
+"LMM: pRF centers Eccentricity (Age Group)","group:category",2,685.49,1.269,0.281783311942252
+"LMM: pRF centers Eccentricity (Age Group)","group:hemi",1,691.78,0.089,0.765736293002483
+"LMM: pRF centers Eccentricity (Age Group)","stream:category",2,684.25,106.505,5.37856221764912e-41
+"LMM: pRF centers Eccentricity (Age Group)","stream:hemi",1,691.46,1.426,0.232772524760803
+"LMM: pRF centers Eccentricity (Age Group)","category:hemi",2,683.74,7.575,0.000557218176816353
+"LMM: pRF centers Eccentricity (Age Group)","group:stream:category",2,684.25,0.33,0.719153143063272
+"LMM: pRF centers Eccentricity (Age Group)","group:stream:hemi",1,691.46,0.477,0.490209214207685
+"LMM: pRF centers Eccentricity (Age Group)","group:category:hemi",2,683.74,0.094,0.910378221806504
+"LMM: pRF centers Eccentricity (Age Group)","stream:category:hemi",2,682.72,10.701,2.65375603473989e-05
+"LMM: pRF centers Eccentricity (Age Group)","group:stream:category:hemi",2,682.72,0.228,0.796420658299562
+"Ventral LMM: pRF centers Eccentricity (Age Group)","group",1,54.52,0.372,0.544612691218662
+"Ventral LMM: pRF centers Eccentricity (Age Group)","category",3,358.5,84.591,2.10295142469233e-41
+"Ventral LMM: pRF centers Eccentricity (Age Group)","hemi",1,364.21,21.269,5.53436113836908e-06
+"Ventral LMM: pRF centers Eccentricity (Age Group)","group:category",3,358.5,1.185,0.315156174931381
+"Ventral LMM: pRF centers Eccentricity (Age Group)","group:hemi",1,364.21,0.004,0.952336291269443
+"Ventral LMM: pRF centers Eccentricity (Age Group)","category:hemi",3,356.71,5.069,0.0018931664430329
+"Ventral LMM: pRF centers Eccentricity (Age Group)","group:category:hemi",3,356.71,0.447,0.719518119863667
+"LMM: pRF centers Eccentricity (Age Continuous)","age",1,63.42,0.716,0.40079516122321
+"LMM: pRF centers Eccentricity (Age Continuous)","stream",1,694.77,90.471,3.00420669133813e-20
+"LMM: pRF centers Eccentricity (Age Continuous)","category",2,686.09,5.28,0.0053008093644989
+"LMM: pRF centers Eccentricity (Age Continuous)","hemi",1,693.26,64.064,5.07578254654482e-15
+"LMM: pRF centers Eccentricity (Age Continuous)","age:stream",1,695.44,0.747,0.387858944177565
+"LMM: pRF centers Eccentricity (Age Continuous)","age:category",2,685.99,1.891,0.151683290942674
+"LMM: pRF centers Eccentricity (Age Continuous)","age:hemi",1,690.39,0.094,0.759189174286145
+"LMM: pRF centers Eccentricity (Age Continuous)","stream:category",2,685.29,109.945,3.86973936716439e-42
+"LMM: pRF centers Eccentricity (Age Continuous)","stream:hemi",1,690.82,2.156,0.142480618189875
+"LMM: pRF centers Eccentricity (Age Continuous)","category:hemi",2,684.45,8.341,0.000263531680104067
+"LMM: pRF centers Eccentricity (Age Continuous)","age:stream:category",2,684.36,0.187,0.829730652273358
+"LMM: pRF centers Eccentricity (Age Continuous)","age:stream:hemi",1,693.81,0.512,0.474547798101123
+"LMM: pRF centers Eccentricity (Age Continuous)","age:category:hemi",2,683.81,0.006,0.993638301972972
+"LMM: pRF centers Eccentricity (Age Continuous)","stream:category:hemi",2,683.3,10.815,2.37588476141858e-05
+"LMM: pRF centers Eccentricity (Age Continuous)","age:stream:category:hemi",2,683.3,0.103,0.902317946763273
+"Ventral LMM: pRF centers Eccentricity (Age Continuous)","age",1,58.35,0.756,0.388273662702312
+"Ventral LMM: pRF centers Eccentricity (Age Continuous)","category",3,359.61,85.788,6.91300945170538e-42
+"Ventral LMM: pRF centers Eccentricity (Age Continuous)","hemi",1,361.99,23.888,1.53673604842149e-06
+"Ventral LMM: pRF centers Eccentricity (Age Continuous)","age:category",3,359,1.362,0.254282992507297
+"Ventral LMM: pRF centers Eccentricity (Age Continuous)","age:hemi",1,368.36,0.396,0.529625692515201
+"Ventral LMM: pRF centers Eccentricity (Age Continuous)","category:hemi",3,357.56,4.873,0.0024674117579506
+"Ventral LMM: pRF centers Eccentricity (Age Continuous)","age:category:hemi",3,357.26,0.106,0.956265745539793

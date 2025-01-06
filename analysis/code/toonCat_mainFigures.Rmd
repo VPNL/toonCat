@@ -1,0 +1,311 @@
+---
+title: "toonCat_mainFigures"
+author: "Jewelia K. Yao"
+date: "2024-12-04"
+output: html_document
+---
+
+TOONCAT MAIN FIGURES
+Main figures for the toonCat manuscript. Includes only the R generated plots, but other figures are noted (i.e. Figure 1). See MATLAB scripts and figures folder for other figure components.
+
+```{r Setup}
+source("~/Desktop/FYP/toonCat/results/toonCat_analysisSetup.R")
+output_directory <- "~/Desktop/FYP/toonCat/results/figures_tables/main"
+```
+
+
+# Figure 1. Toonotopy experiment and validation in adolescents. 
+
+(A) Toonotopy stimuli from Finzi et al. (2021) features a bar with colorful cartoon images of faces, words, bodies, places, and objects that change at 8Hz sweeps across a gray background at 4 angles (0°, 45°, 90°, 135°) each in 2 directions. Participants fixated at the center dot and indicated when the dot changed colors. (B) pRF CSS model from Kay et al. (2013). Left panel shows a single pRF with parameters of location (x,y) and size (σ) modeled by a 2D Gaussian. Middle panel depicts the function (Dumoulin & Wandell, 2008), with compressive nonlinearity, used to model the response. Right panel shows schematic of the pRF distribution within an ROI. (C) Phase, eccentricity, and size maps in an example adolescent (age 11) with V1 (purple), V2 (magenta), and V3 (gold)  drawn on the size on map. (D) pRF size versus eccentricity relationship is similar across adolescents (dotted line) and adults (solid line) in early visual cortex (V1 - V3).
+
+See figure folder
+
+# Figure 2. Functional localizer experiment yields category-selective ROIs across visual cortex that have retinotopic properties. 
+
+(A) Example stimuli of faces (children, adults; red), characters (words, numbers; blue), bodies and limbs (yellow), places (corridors, houses; green), and objects (car, guitar; black) from the fLOC experiment (see Methods). (B) Category-selective ROIs defined using contrast maps from fLOC in an example adolescent participant (age 11). Left: right and left hemisphere ventral ROIs. Right: dorsal and lateral ROIs in the right hemisphere. Left hemisphere dorsal and lateral ROIs are the same as right hemisphere ROIs. (C) Violin plot of proportion of voxels with greater than 20% variance explained in category-selective ROIs the left hemisphere (light) and right hemisphere (dark) ventral, lateral, and dorsal streams in adolescents (a) and adults (A). Error bars: ± SE (standard error of the mean).  
+
+```{r 2C - Proprotion of voxels with > 20% variance explained, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "fig2/F2C_propVE20_violin_allStreams.png"), units="in", width=15, height=2.25, res=300)
+
+df.CoV %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = proportion20, 
+                color = ROI, 
+                fill = ROI, 
+                alpha = hemi)) +
+  geom_violin(position = position_dodge(width = 0.8), na.rm = TRUE) + 
+  geom_point(size = 0.5, na.rm = TRUE) +
+  stat_summary(fun.y = mean,
+               geom = "pointrange", 
+               color = "black") +
+  stat_summary(fun.data = mean_se, 
+               geom = "errorbar", 
+               color = "black") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Proportion Voxels \n with >20% VE") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir")) +
+  scale_color_manual(values = roi_colors, na.translate = FALSE) +
+  scale_alpha_manual(values = c("lh" = 0.45, "rh" = 0.8)) +
+  scale_fill_manual(values = roi_colors, na.translate = FALSE) +
+  scale_y_continuous(breaks = seq(0, 1, .25), limits = c(-.25,1.25)) 
+dev.off()
+```
+
+
+# Figure 3. pRF properties in high-level category selective regions vary across category and stream. 
+
+(A) Top: pRF center polar plots for right hemisphere/left visual field (dark) and left hemisphere/right visual field (light) face- (reds; IOG, pFus, mFus, pSTS), word- (blues; pOTS, mOTS), body/limb- (yellows; OTS, LOS, ITG, MTG), and place-selective (greens; CoS, MOG, IPS) regions in the ventral, lateral, and dorsal streams in adolescents ages 10 - 17. Bottom: pRF center polar plots same as A but in adults ages 22 - 32. (B) Violin plots of y-position of pRFs in visual degrees for category-selective ROIs in the left hemisphere (light) and right hemisphere (dark) ventral, lateral, and dorsal streams in adolescents (a) and adults (A). ROI colors are the same as in A. Error bars: ± SE (standard error of the mean). (C) Same as B but for eccentricity in visual degrees. (D) Same as B but for pRF size. 
+
+```{r 3B - pRF y-position, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "fig3/F3B_pRFcenters_yPosition_violin.png"), units="in", width=15, height=2.25, res=300)
+df.centers_cat %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = centerY, 
+                color = ROI, 
+                fill = ROI, 
+                alpha = hemi)) +
+  geom_violin(position = position_dodge(width = 0.8), na.rm = TRUE) + 
+  geom_point(size = 0.5, na.rm = TRUE) +
+  stat_summary(fun.y = mean,
+               geom = "pointrange", 
+               color = "black") +
+  stat_summary(fun.data = mean_se, 
+               geom = "errorbar", 
+               color = "black") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Y Position  (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir")) +
+  scale_color_manual(values = roi_colors, na.translate = FALSE) +
+  scale_alpha_manual(values = c("lh" = 0.45, "rh" = 0.8)) +
+  scale_fill_manual(values = roi_colors, na.translate = FALSE) +
+  scale_y_continuous(breaks = seq(-8, 8, 4), limits = c(-9, 9)) 
+dev.off()
+```
+
+```{r 3C - pRF eccentricity , fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "fig3/F3C_pRFcenters_eccentricity_violin.png"), units="in", width=15, height=2.25, res=300)
+
+df.centers_cat %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = centerR, 
+                color = ROI, 
+                fill = ROI, 
+                alpha = hemi)) +
+  geom_violin(position = position_dodge(width = 0.8), na.rm = TRUE) + 
+  geom_point(size = 0.5, na.rm = TRUE) +
+  stat_summary(fun.y = mean,
+               geom = "pointrange", 
+               color = "black") +
+  stat_summary(fun.data = mean_se, 
+               geom = "errorbar", 
+               color = "black") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Eccentricity (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+         axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        #axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 15),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir")) +
+  scale_color_manual(values = roi_colors, na.translate = FALSE) +
+  scale_alpha_manual(values = c("lh" = 0.45, "rh" = 0.8)) +
+  scale_fill_manual(values = roi_colors, na.translate = FALSE) +
+  scale_y_continuous(breaks = seq(0, 15, 5), limits = c(-1, 16)) 
+dev.off()
+```
+
+
+```{r 3D - pRF size, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "fig3/F3D_pRFcenters_eccentricity_violin.png"), units="in", width=15, height=2.25, res=300)
+
+df.centers_cat %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = size, 
+                color = ROI, 
+                fill = ROI, 
+                alpha = hemi)) +
+  geom_violin(position = position_dodge(width = 0.8), na.rm = TRUE) + 
+  geom_point(size = 0.5, na.rm = TRUE) +
+  stat_summary(fun.y = mean,
+               geom = "pointrange", 
+               color = "black") +
+  stat_summary(fun.data = mean_se, 
+               geom = "errorbar", 
+               color = "black") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Size (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        #axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 15),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir")) +
+  scale_color_manual(values = roi_colors, na.translate = FALSE) +
+  scale_alpha_manual(values = c("lh" = 0.45, "rh" = 0.8)) +
+  scale_fill_manual(values = roi_colors, na.translate = FALSE) +
+  scale_y_continuous(breaks = seq(0, 30, 10), limits = c(-1, 31)) 
+dev.off()
+```
+
+
+# Figure 4. Visual field coverage (VFC) of high-level category-selective ROIs differential develops.
+
+(A) Average VFC of each ROI in the left hemisphere across adolescents (top row) and adults (bottom row) hemisphere with a gradient ranging from higher coverage in dark red and lower coverage in dark blue. VFC is calculated as the proportion of pRFs covering each point in the visual field for each adolescent and is then averaged across participants in the group. White asterisks with coordinates indicate the average center of mass. Black dotted lines indicate the average full-width half max (FWHM) of the coverage. (B) Same as A but in the right hemisphere. (C) Violin plots of total FWHM in visual degrees for category-selective ROIs in the left hemisphere (light) and right hemisphere (dark) ventral, lateral, and dorsal streams in adolescents (a) and adults (A).
+
+```{r 4C - Total FWHM, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "fig4/F4C_totalFWHM_violin.png"), units="in", width=15, height=2.25, res=300)
+
+df.CoV_cat %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = fwhm, 
+                color = ROI, 
+                fill = ROI, 
+                alpha = hemi)) +
+  geom_violin(position = position_dodge(width = 0.8), na.rm = TRUE) + 
+  geom_point(size = 0.5, na.rm = TRUE) +
+  stat_summary(fun.y = mean,
+               geom = "pointrange", 
+               color = "black") +
+  stat_summary(fun.data = mean_se, 
+               geom = "errorbar", 
+               color = "black") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Total FWHM (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        #axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 15),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir")) +
+  scale_color_manual(values = roi_colors, na.translate = FALSE) +
+  scale_alpha_manual(values = c("lh" = 0.45, "rh" = 0.8)) +
+  scale_fill_manual(values = roi_colors, na.translate = FALSE) +
+  scale_y_continuous(breaks = seq(0, 40, 10), limits = c(-1, 41)) 
+dev.off()
+```
+
+# Figure 5. Category-selectivity differentially develops from adolescence to adulthood.
+
+A. Violin plots of average t-values for the category contrast an ROI was drawn for (e.g. faces > all other categories for the IOG-face ROI) in the left hemisphere (light) and right hemisphere (dark) ventral, lateral, and dorsal stream ROIs in adolescents (a) and adults (A). Error bars: ± SE (standard error of the mean). B. Linear relationships between total FWHM and mean t-value in each ROI for adolescents (light dots) and adults (dark dots). 
+
+```{r 5A - Category Selectivity, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "fig5/F5A_catSelectivity_violins.png"), units="in", width=15, height=2.25, res=300)
+
+df.category %>%
+  mutate(
+         ROI = factor(ROI, levels = roi_order_all),
+         hemi = factor(hemi, levels = c("lh", "rh", "mh", "zh")),
+         group = factor(group, levels = c("adolescents", "Adults"))) %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = meanT, 
+                color = ROI, 
+                fill = ROI, 
+                alpha = hemi)) +
+  geom_violin(position = position_dodge(width = 0.8), na.rm = TRUE) + 
+  geom_point(size = 0.5, na.rm = TRUE) +
+  stat_summary(fun.y = mean,
+               geom = "pointrange", 
+               color = "black") +
+  stat_summary(fun.data = mean_se, 
+               geom = "errorbar", 
+               color = "black") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Mean T-Value") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir")) +
+  scale_color_manual(values = roi_colors, na.translate = FALSE) +
+  scale_alpha_manual(values = c("lh" = 0.45, "rh" = 0.8)) +
+  scale_fill_manual(values = roi_colors, na.translate = FALSE) +
+  scale_y_continuous(breaks = seq(-2, 8, 2), limits = c(-3, 9))
+dev.off()
+```
+
+```{r 5B - Total FWHM v Category Selectivity}
+png(file.path(output_directory, "fig5/F5B_catSelectivity_FWHM_scatter_lm.png"), units="in", width=15, height=3, res=300)
+# Create a violin plot of the ROI X values
+df.cat_FWHM %>%
+  filter(hemi %in% c("rh", "lh")) %>%
+  mutate(
+         ROI = factor(ROI, levels = roi_order_all),
+        hemi = factor(hemi, levels = c("lh", "rh", "mh", "zh")),
+         group = factor(group, levels = c("adolescents", "Adults"))) %>%
+  ggplot(., aes(x = fwhm, 
+                y = meanT, 
+                color = ROI, 
+                fill = ROI)) +
+  geom_point(size = 1, na.rm = TRUE, 
+                aes(alpha = group)) +
+  geom_smooth(method = "lm") + 
+  geom_hline(yintercept = 0) +
+  labs(y = "Mean T-Value",
+       x = "Total FWHM (°)") +
+  facet_grid(hemi ~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir")) +
+  scale_color_manual(values = roi_colors, na.translate = FALSE) +
+  scale_alpha_manual(values = c("adolescents" = 0.4, "Adults" = 1)) +
+  scale_fill_manual(values = roi_colors, na.translate = FALSE) +
+  scale_x_continuous(breaks = seq(0, 40, 10), limits = c(0, 40))
+  scale_y_continuous(breaks = seq(-2, 8, 2), limits = c(-3, 9))
+dev.off()
+```
+
+

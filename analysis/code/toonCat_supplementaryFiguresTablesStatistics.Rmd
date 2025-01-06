@@ -1,0 +1,916 @@
+---
+title: "toonCat_supplementaryFiguresTables"
+author: "Jewelia K. Yao"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+TOONCAT SUPPLEMENTARY FIGURES AND TABLES
+Supplementary tables and figures, in order of reference, for the toonCat manuscript. Includes only the R generated plots, but other figures are noted. See MATLAB scripts and figures folder for other figure components. Supplement includes all main statistics computed in the manuscript.
+
+```{r Setup, warning=F, message=F, echo=FALSE}
+# Setup file
+source("~/Desktop/FYP/toonCat/results/toonCat_analysisSetup.R")
+
+# Set global variables
+output_directory <- "~/Desktop/FYP/toonCat/results/figures_tables/supplementary/tables"
+LMM_filters <- c("hemi != 'mh'", "hemi != 'zh'", "ROI != 'blank'","ROI != 'blank1'", "category != 'word'", "category != 'words'")
+ventralLMM_filters <- c("hemi != 'mh'", "hemi != 'zh'", "ROI != 'blank'","ROI != 'blank1'", "stream == 'ventral'")
+retinotopyLMM_filters <- c("ROI %in% c('V1', 'V2', 'V3')", "hemi != 'mh'", "hemi != 'zh'")
+```
+
+# FUNCTIONS
+```{r}
+run_and_format_analysis <- function(analysis_list, file_path, file_name, bold_p_value = 0.05, digits = 3) {
+  
+  # Helper function to process individual analyses
+  run_LMM_analysis <- function(data, formula, filters = NULL, analysis_name) {
+  # Apply filters dynamically if provided
+  if (!is.null(filters) && length(filters) > 0) {
+    filtered_data <- data %>%
+      filter(!!!rlang::parse_exprs(filters)) %>%
+      na.omit()
+  } else {
+    filtered_data <- data %>%
+      na.omit()
+  }
+  
+  # Fit the model and perform joint tests
+  model <- lmer(formula, data = filtered_data)
+  results <- joint_tests(model)
+  
+  # Add the analysis name as a column
+  results <- results %>%
+    mutate(Analysis = analysis_name)
+  
+  return(results)
+}
+
+  
+  # Process each analysis
+  combined_results <- bind_rows(lapply(analysis_list, function(analysis) {
+    run_LMM_analysis(
+      data = analysis$data,
+      formula = analysis$formula,
+      filters = analysis$filters,
+      analysis_name = analysis$analysis_name
+    )
+  }))
+  
+  # Define the format and save function
+  format_and_save_table <- function(results, file_path, bold_p = TRUE, bold_p_value, digits) {
+    # Format p-values and F-ratios
+    format_p <- function(p) {
+      ifelse(p < 0.0001, format(p, scientific = TRUE, digits = 4), format(p, nsmall = 3))
+    }
+    format_F <- function(Fval) {
+      format(Fval, nsmall = digits)
+    }
+    
+    # Reorder columns to make "Analysis" the first column
+    formatted_results <- results %>%
+      mutate(
+        p.value = as.numeric(p.value),
+        p.value = sapply(p.value, format_p),
+        F.ratio = sapply(F.ratio, format_F)
+      ) %>%
+      select(Analysis, everything()) %>%  # Ensure Analysis is the first column
+      group_by(Analysis) %>%
+      mutate(Analysis = ifelse(row_number() == 1, Analysis, "")) %>%  # Show Analysis name only in the first row
+      ungroup()
+    
+    # Identify the rows where a new analysis starts (first row of each analysis group)
+    add_space_rows <- which(formatted_results$Analysis != "")
+    
+    # Generate the table
+    table <- formatted_results %>%
+      kable(format = "html", booktabs = TRUE, digits = digits) %>%
+      kable_classic(full_width = FALSE, html_font = "Calibri")
+    
+    # Add spacing above rows where a new analysis starts (excluding the first analysis)
+    for (row in add_space_rows[-1]) {  # Skip the first analysis row
+      table <- table %>%
+        row_spec(row, extra_css = "border-top: 10px solid white;")
+    }
+    
+    # Apply bolding conditionally based on `bold_p`
+    if (bold_p) {
+      table <- table %>%
+        row_spec(which(as.numeric(formatted_results$p.value) < bold_p_value), bold = TRUE)
+    }
+    
+    # Save the table
+    save_kable(table, file = file_path, zoom = 3, density = 500)
+    
+    return(formatted_results)  # Return the formatted results in case further use is needed
+  }
+  
+  # Construct full file paths
+  bold_file_path <- file.path(file_path, paste0(file_name, "_bold.png"))
+  no_bold_file_path <- file.path(file_path, paste0(file_name, ".png"))
+  
+  # Save bolded table
+  formatted_results_bold <- format_and_save_table(
+    results = combined_results,
+    file_path = bold_file_path,
+    bold_p = TRUE,
+    bold_p_value = bold_p_value,
+    digits = digits
+  )
+  
+  # Save non-bolded table
+  formatted_results_no_bold <- format_and_save_table(
+    results = combined_results,
+    file_path = no_bold_file_path,
+    bold_p = FALSE,
+    bold_p_value = bold_p_value,
+    digits = digits
+  )
+  
+  # Return combined results and paths to saved files
+  return(list(
+    combined_results = combined_results,
+    bold_output_file = bold_file_path,
+    no_bold_output_file = no_bold_file_path
+  ))
+}
+```
+
+```{r}
+run_and_format_analysis_asCSV <- function(analysis_list, file_path, file_name, bold_p_value = 0.05, digits = 3) {
+  
+  # Helper function to process individual analyses
+  run_LMM_analysis <- function(data, formula, filters = NULL, analysis_name) {
+    if (!is.null(filters) && length(filters) > 0) {
+      filtered_data <- data %>%
+        filter(!!!rlang::parse_exprs(filters)) %>%
+        na.omit()
+    } else {
+      filtered_data <- data %>%
+        na.omit()
+    }
+    
+    model <- lmer(formula, data = filtered_data)
+    results <- joint_tests(model)
+    
+    # Add the analysis name as a column
+    results <- results %>%
+      mutate(Analysis = analysis_name)
+    
+    return(results)
+  }
+
+  # Process each analysis
+  combined_results <- bind_rows(lapply(analysis_list, function(analysis) {
+    run_LMM_analysis(
+      data = analysis$data,
+      formula = analysis$formula,
+      filters = analysis$filters,
+      analysis_name = analysis$analysis_name
+    )
+  }))
+
+  # Ensure the Analysis column is the first
+  combined_results <- combined_results %>%
+    dplyr::select(Analysis, everything())
+
+  # Save the results to CSV
+  results_path <- file.path(file_path, paste0(file_name, ".csv"))
+  write.csv(combined_results, file = results_path, row.names = FALSE)
+
+  # Return combined results and path to saved file
+  return(list(
+    combined_results = combined_results,
+    output_file = results_path
+  ))
+}
+```
+
+
+# Supplementary Figure 1. Phase maps for all participants
+See figure folder
+
+# Supplementary Figure 2. Eccentricity maps for all participants
+See figure folder
+
+# Supplementary Figure 3. Size maps for all participants
+See figure folder
+
+# Supplementary Table 1. V1, V2, V3 statistics
+```{r, warning=F, message=F, echo=FALSE}
+S.Table1_V1V2V3 <- list(
+  list(
+    data = df.centers,
+    formula = centerX ~ group*ROI*hemi + (1|sub),
+    filters = retinotopyLMM_filters,
+    analysis_name = "LMM: pRF centers X-position (Age Group)"
+  ),
+    list(
+    data = df.centers,
+    formula = centerY ~ group*ROI*hemi + (1|sub),
+    filters = retinotopyLMM_filters,
+    analysis_name = "LMM: pRF centers Y-position (Age Group)"
+  ),
+    list(
+    data = df.centers,
+    formula = centerR ~ group*ROI*hemi + (1|sub),
+    filters = retinotopyLMM_filters,
+    analysis_name = "LMM: pRF centers Eccentricity (Age Group)"
+  ),
+    list(
+    data = df.centers,
+    formula = size ~ group*ROI*hemi + (1|sub),
+    filters = retinotopyLMM_filters,
+    analysis_name = "LMM: pRF size (Age Group)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table1_V1V2V3,
+  file_path = output_directory,
+  file_name = "S.Table1_V1V2V3",
+  bold_p_value = 0.05,
+  digits = 3
+)
+
+# CSV format
+output <- run_and_format_analysis_asCSV(
+  analysis_list = S.Table1_V1V2V3,
+  file_path = output_directory,
+  file_name = "S.Table1_V1V2V3",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 2. pRF size vs eccentricity statistics
+```{r, warning=F, message=F, echo=FALSE}
+
+S.Table2_sizeVecc <- list(
+  list(
+    data = df.sizeEcc_ret,
+    formula = slope ~ group*ROI*hemi + (1|sub),
+    filters = NULL,
+    analysis_name = "LMM: Size v. Ecc Slopes"
+  ),
+  list(
+    data = df.sizeEcc_ret,
+    formula = intercept ~ group*ROI*hemi + (1|sub),
+    filters = NULL,
+    analysis_name = "LMM: Size v. Ecc Intercepts"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table2_sizeVecc,
+  file_path = output_directory,
+  file_name = "S.Table2_sizeVecc_slopes_intercepts",
+  bold_p_value = 0.05,
+  digits = 3
+)
+
+# CSV format
+output <- run_and_format_analysis_asCSV(
+  analysis_list = S.Table2_sizeVecc,
+  file_path = output_directory,
+  file_name = "S.Table2_sizeVecc_slopes_intercepts",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 3. Number of individuals with ROI per group
+```{r}
+# Create summary table
+summary_table <- df.CoV_cat_latdors %>%
+  na.omit() %>%
+  filter(hemi %in% c("lh", "rh")) %>%
+  group_by(ROI, hemi, group) %>%
+  summarise(N = n_distinct(subject), .groups = "drop") %>%
+  pivot_wider(
+    names_from = c(group, hemi), 
+    values_from = N) %>%
+  mutate(ROI = stringr::str_replace_all(ROI, "_", "-"),
+         ROI = stringr::str_replace_all(ROI, "limbs", "bodies"),
+         adolescents_rh = ifelse(ROI == "mOTS-words", " ", adolescents_rh),
+         Adults_rh = ifelse(ROI == "mOTS-words", " ", Adults_rh),
+         ROI = ifelse(ROI == "pSTS-faces", "pSTS-faces*", ROI),
+         ROI = ifelse(ROI == "MTG-bodies", "MTG-bodies*", ROI))
+
+# Define headers with subcolumns for hemispheres under each measure
+measure_headers <- c(
+  " " = 1, "Left Hemisphere" = 2, "Right Hemisphere" = 2)
+
+# Manually set column names
+colnames(summary_table) <- c(
+  "ROI", "adolescents", "Adults", "adolescents", "Adults")
+
+# Create HTML tables
+count_table <- summary_table %>%
+  kbl(caption = "",  align=('lcccc')) %>%
+  kable_classic(full_width = F, html_font = "Calibri") %>%
+  row_spec(7, extra_css = "padding-bottom: 30px;") %>% 
+  row_spec(11, extra_css = "padding-bottom: 30px;") %>%
+  add_header_above(measure_headers, extra_css = "font-size: 10px;") %>%
+ save_kable(file = file.path(output_directory, "S.Table3_ROI_counts.png"),
+            zoom = 3, 
+            density = 500)
+
+# Save the table to a CSV file
+csv_path <- file.path(output_directory, "S.Table3_ROI_counts.csv")
+write.csv(summary_table, file = csv_path, row.names = FALSE)
+```
+
+# Supplementary Table 4. Proportion of voxels with VE > 20% statistics
+```{r, warning=F, message=F, echo=FALSE}
+
+S.Table4_proportionVE20 <- list(
+  list(
+    data = df.CoV_cat_latdors,
+    formula = proportion20 ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: Proportion Voxels with Variance Explained > 20%"
+  ),
+  list(
+    data = df.CoV_cat_latdors,
+    formula = proportion20 ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: Proportion Voxels with Variance Explained > 20%"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table4_proportionVE20,
+  file_path = output_directory,
+  file_name = "S.Table4_proportionVE20",
+  bold_p_value = 0.05,
+  digits = 3
+)
+
+# CSV format
+output <- run_and_format_analysis_asCSV(
+  analysis_list = S.Table4_proportionVE20,
+  file_path = output_directory,
+  file_name = "S.Table4_proportionVE20",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Figure 4. pRF x-position
+```{r pRF x-position, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "S.F4_pRFcenters_xPosition_violin.png"), units="in", width=15, height=2.25, res=300)
+df.centers_cat %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = centerX, 
+                color = ROI, 
+                fill = ROI, 
+                alpha = hemi)) +
+  geom_violin(position = position_dodge(width = 0.8), na.rm = TRUE) + 
+  geom_point(size = 0.5, na.rm = TRUE) +
+  stat_summary(fun.y = mean,
+               geom = "pointrange", 
+               color = "black") +
+  stat_summary(fun.data = mean_se, 
+               geom = "errorbar", 
+               color = "black") +
+  geom_hline(yintercept = 0) +
+  labs(y = "X Position  (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir")) +
+  scale_color_manual(values = roi_colors, na.translate = FALSE) +
+  scale_alpha_manual(values = c("lh" = 0.45, "rh" = 0.8)) +
+  scale_fill_manual(values = roi_colors, na.translate = FALSE) +
+  scale_y_continuous(breaks = seq(-20, 20, 5), limits = c(-21, 21)) 
+dev.off()
+```
+
+# Supplementary Table 5. pRF x-position statistics
+```{r, warning=F, message=F, echo=FALSE}
+
+S.Table5_pRFcenters_X <- list(
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerX ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF centers X-position (Age Group)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerX ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF centers X-position (Age Group)"
+  ),
+    list(
+    data = df.centers_cat_latdors,
+    formula = centerX ~ age*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF centers X-position (Age Continuous)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerX ~ age*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF centers X-position (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table5_pRFcenters_X,
+  file_path = output_directory,
+  file_name = "S.Table5_pRFcenters_X",
+  bold_p_value = 0.05,
+  digits = 3
+)
+
+# CSV format
+output <- run_and_format_analysis_asCSV(
+  analysis_list = S.Table5_pRFcenters_X,
+  file_path = output_directory,
+  file_name = "S.Table5_pRFcenters_X",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 6. pRF y-position statistics
+```{r, warning=F, message=F, echo=FALSE}
+
+S.Table6_pRFcenters_Y <- list(
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerY ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF centers Y-position (Age Group)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerY ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF centers Y-position (Age Group)"
+  ),
+    list(
+    data = df.centers_cat_latdors,
+    formula = centerY ~ age*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF centers Y-position (Age Continuous)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerY ~ age*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF centers Y-position (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table6_pRFcenters_Y,
+  file_path = output_directory,
+  file_name = "S.Table6_pRFcenters_Y",
+  bold_p_value = 0.05,
+  digits = 3
+)
+
+# CSV format
+output <- run_and_format_analysis_asCSV(
+  analysis_list = S.Table6_pRFcenters_Y,
+  file_path = output_directory,
+  file_name = "S.Table6_pRFcenters_Y",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 7. pRF Eccentricity statistics
+```{r, warning=F, message=F, echo=FALSE}
+
+S.Table7_pRFcenters_eccentricity <- list(
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerR ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF centers Eccentricity (Age Group)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerR ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF centers Eccentricity (Age Group)"
+  ),
+    list(
+    data = df.centers_cat_latdors,
+    formula = centerR ~ age*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF centers Eccentricity (Age Continuous)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerR ~ age*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF centers Eccentricity (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table7_pRFcenters_eccentricity,
+  file_path = output_directory,
+  file_name = "S.Table7_pRFcenters_eccentricity",
+  bold_p_value = 0.05,
+  digits = 3
+)
+
+# CSV format
+output <- run_and_format_analysis_asCSV(
+  analysis_list = S.Table7_pRFcenters_eccentricity,
+  file_path = output_directory,
+  file_name = "S.Table7_pRFcenters_eccentricity",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 8. pRF size statistics
+```{r, warning=F, message=F, echo=FALSE}
+
+S.Table8_pRFcenters_size <- list(
+  list(
+    data = df.centers_cat_latdors,
+    formula = size ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF Size (Age Group)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = size ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF Size (Age Group)"
+  ),
+    list(
+    data = df.centers_cat_latdors,
+    formula = size ~ age*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF Size (Age Continuous)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = size ~ age*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF Size (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table8_pRFcenters_size,
+  file_path = output_directory,
+  file_name = "S.Table8_pRFcenters_size",
+  bold_p_value = 0.05,
+  digits = 3
+)
+
+# CSV format
+output <- run_and_format_analysis_asCSV(
+  analysis_list = S.Table8_pRFcenters_size,
+  file_path = output_directory,
+  file_name = "S.Table8_pRFcenters_size",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 9. FWHM statistics
+```{r, warning=F, message=F, echo=FALSE}
+
+S.Table9_FWHM <- list(
+  list(
+    data = df.CoV_cat_latdors,
+    formula = fwhm ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: Total FWHM (Age Group)"
+  ),
+  list(
+    data = df.CoV_cat_latdors,
+    formula = fwhm ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: Total FWHM (Age Group)"
+  ),
+  list(
+    data = df.CoV_cat_latdors,
+    formula = fwhm ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: Total FWHM (Age Continuous)"
+  ),
+  list(
+    data = df.CoV_cat_latdors,
+    formula = fwhm ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: Total FWHM (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table9_FWHM,
+  file_path = output_directory,
+  file_name = "S.Table9_FWHM",
+  bold_p_value = 0.05,
+  digits = 3
+)
+
+# CSV format
+output <- run_and_format_analysis_asCSV(
+  analysis_list = S.Table9_FWHM,
+  file_path = output_directory,
+  file_name = "S.Table9_FWHM",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 10. FWHM Quadrant Percentages
+``` {r}
+CoV_table <- df.CoV_cat %>%
+  mutate(group = recode(group, "kids" = "adolescents")) %>%
+  group_by(ROI, hemi, group) %>%
+  na.omit() %>%
+  summarise(
+    mean_upperContra = mean(fwhm_upperContra, na.rm = TRUE),
+    sd_upperContra = sd(fwhm_upperContra, na.rm = TRUE),
+    mean_lowerContra = mean(fwhm_lowerContra, na.rm = TRUE),
+    sd_lowerContra = sd(fwhm_lowerContra, na.rm = TRUE),
+    mean_upperIpsi = mean(fwhm_upperIpsi, na.rm = TRUE),
+    sd_upperIpsi = sd(fwhm_upperIpsi, na.rm = TRUE),
+    mean_lowerIpsi = mean(fwhm_lowerIpsi, na.rm = TRUE),
+    sd_lowerIpsi = sd(fwhm_lowerIpsi, na.rm = TRUE),
+    mean_central5 = mean(fwhm_central5, na.rm = TRUE),
+    sd_central5 = sd(fwhm_central5, na.rm = TRUE)
+  ) %>%
+  mutate(
+      UC = as.character(paste0(format(round(mean_upperContra, 0), nsmall = 0), " ± ", format(round(sd_upperContra, 0), nsmall = 0))),
+    LC = as.character(paste0(format(round(mean_lowerContra, 0), nsmall = 0), " ± ", format(round(sd_lowerContra, 0), nsmall = 0))),
+    UI = as.character(paste0(format(round(mean_upperIpsi, 0), nsmall = 0), " ± ", format(round(sd_upperIpsi, 0), nsmall = 0))),
+    LI = as.character(paste0(format(round(mean_lowerIpsi, 0), nsmall = 0), " ± ", format(round(sd_lowerIpsi, 0), nsmall = 0))),
+    central5 = as.character(paste0(format(round(mean_central5, 0), nsmall = 0), " ± ", format(round(sd_central5, 0), nsmall = 0)))
+  ) %>%
+  na.omit() %>%
+  select(ROI, hemi, group, UC, LC, UI, LI, central5)
+
+# Pivot the table to restructure it for the desired layout
+CoV_table_transformed <- CoV_table %>%
+  pivot_longer(
+    cols = UC:central5, # Select all measure columns
+    names_to = "Measure", 
+    values_to = "Value"
+  ) %>%
+  pivot_wider(
+    names_from = c(Measure, hemi), # Create subheadings for measures and hemispheres
+    values_from = Value
+  )%>%
+  mutate(
+    UC_rh= ifelse(ROI == "mOTS_words", " ", UC_rh),
+    UI_rh = ifelse(ROI == "mOTS_words", " ", UI_rh),
+    LC_rh = ifelse(ROI == "mOTS_words", " ", LC_rh),
+    LI_rh = ifelse(ROI == "mOTS_words", " ", LI_rh),
+    central5_rh = ifelse(ROI == "mOTS_words", " ", central5_rh),
+    ROI = stringr::str_replace_all(ROI, "_", "-") # Replace underscores with hyphens
+  ) %>%
+  select(ROI, group, UC_lh, UC_rh, LC_lh, LC_rh, LI_lh, LI_rh, UI_lh, UI_rh, central5_lh,central5_rh) 
+
+# Save the transformed table to a CSV file
+csv_path <- file.path(output_directory,"S.Table10_VFC_FWHM_Quadrant_percentages.csv")
+write.csv(CoV_table_transformed, file = csv_path, row.names = FALSE)
+
+# Print message to confirm saving
+print(paste("CSV Table saved to:", csv_path))
+
+# Define headers with subcolumns for hemispheres under each measure
+measure_headers <- c(
+  " " = 2, "UC" = 2, "LC" = 2, "LI" = 2, "UI" = 2, "<5°" = 2) # Repeat each measure for hemispheres
+
+# Manually set column names
+colnames(CoV_table_transformed) <- c(
+  "ROI", "Group", 
+  "lh", "rh", "lh", "rh", "lh", "rh", "lh", "rh", 
+   "lh", "rh")
+
+
+# Create the kable table with headers and subheaders
+CoV_table_transformed %>%
+  kable("html", booktabs = TRUE, linesep = " ") %>%
+  kable_styling(
+    full_width = TRUE, 
+    position = "center", 
+    font_size = 16
+  ) %>%
+  add_header_above(measure_headers, extra_css = "font-size: 20px;") %>%
+  # Manual column padding
+  column_spec(1, extra_css = "min-width: 80px; white-space: nowrap; padding-left: 10px; padding-right: 10px; font-size: 16px;") %>%  
+  column_spec(3:9, extra_css = "min-width: 80px; white-space: nowrap; padding-left: 10px; padding-right: 10px; font-size: 16px;") %>%  
+  column_spec(10, extra_css = "min-width: 80px; white-space: nowrap; padding-left: 10px; padding-right: 40px;font-size: 16px;") %>%
+ column_spec(11:12, extra_css = "min-width: 80px; white-space: nowrap; padding-left: 10px; padding-right: 10px;font-size: 16px;") %>%
+  save_kable(file = file.path(output_directory, "S.Table10_VFC_FWHM_Quadrant_percentages.png"))
+```
+
+# Supplementary Table 11. Category selectivity statistics
+```{r, warning=F, message=F, echo=FALSE}
+
+S.Table11_catSelectivity_meanT <- list(
+  list(
+    data = df.category_latdors,
+    formula = meanT ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: Category Selectivity - Mean T-Value (Age Group)"
+  ),
+  list(
+    data = df.category_latdors,
+    formula = meanT ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: Category Selectivity - Mean T-Value  (Age Group)"
+  ),
+    list(
+    data = df.category_latdors,
+    formula = meanT ~ age*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: Category Selectivity - Mean T-Value  (Age Continuous)"
+  ),
+  list(
+    data = df.category_latdors,
+    formula = meanT ~ age*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: Category Selectivity - Mean T-Value  (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table11_catSelectivity_meanT,
+  file_path = output_directory,
+  file_name = "S.Table11_catSelectivity_meanT",
+  bold_p_value = 0.05,
+  digits = 3
+)
+
+# CSV format
+output <- run_and_format_analysis_asCSV(
+  analysis_list = S.Table11_catSelectivity_meanT,
+  file_path = output_directory,
+  file_name = "S.Table11_catSelectivity_meanT",
+  bold_p_value = 0.05,
+  digits = 3
+)
+
+```
+
+
+# Supplementary Table 12. Category ROI size statistics
+```{r, warning=F, message=F, echo=FALSE}
+
+S.Table12_catSelectivity_ROIsize <- list(
+  list(
+    data = df.ROIsize_cat_latdors,
+    formula = totalvox ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: ROI Size (Age Group)"
+  ),
+  list(
+    data = df.ROIsize_cat_latdors,
+    formula = totalvox ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: ROI Size (Age Group)"
+  ),
+    list(
+    data = df.ROIsize_cat_latdors,
+    formula = totalvox ~ age*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: ROI Size (Age Continuous)"
+  ),
+  list(
+    data = df.ROIsize_cat_latdors,
+    formula = totalvox ~ age*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: ROI Size (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table12_catSelectivity_ROIsize,
+  file_path = output_directory,
+  file_name = "S.Table12_catSelectivity_ROIsize",
+  bold_p_value = 0.05,
+  digits = 3
+)
+
+# CSV format
+output <- run_and_format_analysis_asCSV(
+  analysis_list = S.Table12_catSelectivity_ROIsize,
+  file_path = output_directory,
+  file_name = "S.Table12_catSelectivity_ROIsize",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+
+# Supplementary Table 13. Category selectivity vs FWHM statistics
+```{r, warning=F, message=F, echo=FALSE}
+
+S.Table13_catSelect_FWHM <- list(
+  list(
+    data = df.cat_FWHM,
+    formula = meanT ~ fwhm*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: Category Selectivity v FWHM (No Age)"
+  ),
+  list(
+    data = df.cat_FWHM,
+    formula = meanT ~ fwhm*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: Category Selectivity v FWHM (No Age)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table13_catSelect_FWHM,
+  file_path = output_directory,
+  file_name = "S.Table13_catSelect_FWHM",
+  bold_p_value = 0.05,
+  digits = 3
+)
+
+# CSV format
+output <- run_and_format_analysis_asCSV(
+  analysis_list = S.Table13_catSelect_FWHM,
+  file_path = output_directory,
+  file_name = "S.Table13_catSelect_FWHM",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Move all bolded files to the bold directory
+```{r}
+# Define the destination subdirectory for bold files
+bold_directory <- file.path(output_directory, "bold")
+csv_directory <- file.path(output_directory, "csv")
+png_directory <- file.path(output_directory, "png")
+
+# Ensure the directories exists
+if (!dir_exists(bold_directory)) {
+  dir_create(bold_directory)
+}
+
+if (!dir_exists(csv_directory)) {
+  dir_create(csv_directory)
+}
+
+if (!dir_exists(png_directory)) {
+  dir_create(png_directory)
+}
+
+# List all files in the source directory
+all_files <- dir_ls(output_directory, type = "file", recurse = FALSE)
+
+# Filter for files with "_bold" in their names
+bold_files <- all_files[grepl("_bold", all_files)]
+csv_files <- all_files[grepl(".csv", all_files)]
+png_files <- all_files[grepl(".png", all_files)]
+
+# Move the bold files to the bold directory
+for (file in bold_files) {
+  file_move(file, file.path(bold_directory, path_file(file)))
+}
+
+for (file in csv_files) {
+  file_move(file, file.path(csv_directory, path_file(file)))
+}
+
+for (file in png_files) {
+  file_move(file, file.path(png_directory, path_file(file)))
+}
+
+# Print summary
+cat("Moved", length(bold_files), "bold.png files to:", bold_directory, "\n")
+cat("Moved", length(csv_files), "csv files to:", csv_directory, "\n")
+cat("Moved", length(png_files), "png files to:", png_directory, "\n")
+```
+
+
+

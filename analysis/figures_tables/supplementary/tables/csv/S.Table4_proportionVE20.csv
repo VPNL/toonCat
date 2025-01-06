@@ -1,0 +1,23 @@
+"Analysis","model term","df1","df2","F.ratio","p.value"
+"LMM: Proportion Voxels with Variance Explained > 20%","group",1,55.19,3.076,0.0849866613405798
+"LMM: Proportion Voxels with Variance Explained > 20%","stream",1,689.98,13.222,0.000297337536814003
+"LMM: Proportion Voxels with Variance Explained > 20%","category",2,683.89,31.444,8.62453358277777e-14
+"LMM: Proportion Voxels with Variance Explained > 20%","hemi",1,689.08,14.143,0.000183821127359328
+"LMM: Proportion Voxels with Variance Explained > 20%","group:stream",1,689.98,0.428,0.513345773493595
+"LMM: Proportion Voxels with Variance Explained > 20%","group:category",2,683.89,4.635,0.0100140335020343
+"LMM: Proportion Voxels with Variance Explained > 20%","group:hemi",1,689.08,0.009,0.923236987918697
+"LMM: Proportion Voxels with Variance Explained > 20%","stream:category",2,683.2,72.143,3.75460422860205e-29
+"LMM: Proportion Voxels with Variance Explained > 20%","stream:hemi",1,688.61,0.661,0.416442412250943
+"LMM: Proportion Voxels with Variance Explained > 20%","category:hemi",2,682.8,0.302,0.739223746245496
+"LMM: Proportion Voxels with Variance Explained > 20%","group:stream:category",2,683.2,2.491,0.083552526200818
+"LMM: Proportion Voxels with Variance Explained > 20%","group:stream:hemi",1,688.61,0.335,0.563207865572836
+"LMM: Proportion Voxels with Variance Explained > 20%","group:category:hemi",2,682.8,0.19,0.826997488726962
+"LMM: Proportion Voxels with Variance Explained > 20%","stream:category:hemi",2,681.59,4.829,0.00827253863404044
+"LMM: Proportion Voxels with Variance Explained > 20%","group:stream:category:hemi",2,681.59,1.941,0.1443088266563
+"Ventral LMM: Proportion Voxels with Variance Explained > 20%","group",1,46.94,2.751,0.103876229251159
+"Ventral LMM: Proportion Voxels with Variance Explained > 20%","category",3,355.73,36.727,1.06272148877628e-20
+"Ventral LMM: Proportion Voxels with Variance Explained > 20%","hemi",1,359.21,9.374,0.00236637054648955
+"Ventral LMM: Proportion Voxels with Variance Explained > 20%","group:category",3,355.73,0.853,0.465516884859635
+"Ventral LMM: Proportion Voxels with Variance Explained > 20%","group:hemi",1,359.21,1.069,0.301935163318748
+"Ventral LMM: Proportion Voxels with Variance Explained > 20%","category:hemi",3,354.79,3.751,0.0112245964711374
+"Ventral LMM: Proportion Voxels with Variance Explained > 20%","group:category:hemi",3,354.79,0.879,0.452345602643692

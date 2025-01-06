@@ -1,0 +1,45 @@
+"Analysis","model term","df1","df2","F.ratio","p.value"
+"LMM: pRF Size (Age Group)","group",1,64.2,5.621,0.0207624008817382
+"LMM: pRF Size (Age Group)","stream",1,694.48,35.637,3.79125256903648e-09
+"LMM: pRF Size (Age Group)","category",2,686.21,21.692,7.33327693875446e-10
+"LMM: pRF Size (Age Group)","hemi",1,693.04,1.707,0.191812456620063
+"LMM: pRF Size (Age Group)","group:stream",1,694.48,3.287,0.0702434738743682
+"LMM: pRF Size (Age Group)","group:category",2,686.21,1.229,0.293302114273942
+"LMM: pRF Size (Age Group)","group:hemi",1,693.04,9.828,0.0017917186598922
+"LMM: pRF Size (Age Group)","stream:category",2,684.82,25.675,1.76866721999043e-11
+"LMM: pRF Size (Age Group)","stream:hemi",1,692.73,0.862,0.353638707907119
+"LMM: pRF Size (Age Group)","category:hemi",2,684.29,0.529,0.589366468029072
+"LMM: pRF Size (Age Group)","group:stream:category",2,684.82,1.478,0.228781101889004
+"LMM: pRF Size (Age Group)","group:stream:hemi",1,692.73,4.06,0.0442982347946981
+"LMM: pRF Size (Age Group)","group:category:hemi",2,684.29,2.948,0.0531073892674021
+"LMM: pRF Size (Age Group)","stream:category:hemi",2,683.16,0.574,0.563390338240141
+"LMM: pRF Size (Age Group)","group:stream:category:hemi",2,683.16,3.615,0.0274317401699912
+"Ventral LMM: pRF Size (Age Group)","group",1,55.86,3.943,0.051973977247406
+"Ventral LMM: pRF Size (Age Group)","category",3,359.16,19.069,1.69892008789418e-11
+"Ventral LMM: pRF Size (Age Group)","hemi",1,365.14,1.313,0.252591052700993
+"Ventral LMM: pRF Size (Age Group)","group:category",3,359.16,0.635,0.59279969680349
+"Ventral LMM: pRF Size (Age Group)","group:hemi",1,365.14,2.502,0.114531748653597
+"Ventral LMM: pRF Size (Age Group)","category:hemi",3,357.22,0.341,0.795486377874471
+"Ventral LMM: pRF Size (Age Group)","group:category:hemi",3,357.22,1.573,0.19551833824156
+"LMM: pRF Size (Age Continuous)","age",1,65.58,4.232,0.043659165396564
+"LMM: pRF Size (Age Continuous)","stream",1,695.71,33.297,1.19122812195633e-08
+"LMM: pRF Size (Age Continuous)","category",2,686.63,20.448,2.36613520989625e-09
+"LMM: pRF Size (Age Continuous)","hemi",1,694.2,0.51,0.475409315118794
+"LMM: pRF Size (Age Continuous)","age:stream",1,696.47,3.785,0.0521250772910315
+"LMM: pRF Size (Age Continuous)","age:category",2,686.54,1.062,0.34644858205343
+"LMM: pRF Size (Age Continuous)","age:hemi",1,691.19,7.37,0.00679711343102271
+"LMM: pRF Size (Age Continuous)","stream:category",2,685.75,24.906,3.61748437032867e-11
+"LMM: pRF Size (Age Continuous)","stream:hemi",1,691.6,0.366,0.545334403098048
+"LMM: pRF Size (Age Continuous)","category:hemi",2,684.9,0.403,0.668637058818998
+"LMM: pRF Size (Age Continuous)","age:stream:category",2,684.77,1.734,0.177419205051185
+"LMM: pRF Size (Age Continuous)","age:stream:hemi",1,694.88,3.926,0.0479376093354072
+"LMM: pRF Size (Age Continuous)","age:category:hemi",2,684.19,2.538,0.0797664613130132
+"LMM: pRF Size (Age Continuous)","stream:category:hemi",2,683.66,0.208,0.812532623685615
+"LMM: pRF Size (Age Continuous)","age:stream:category:hemi",2,683.65,3.312,0.0370341463364182
+"Ventral LMM: pRF Size (Age Continuous)","age",1,59.35,1.468,0.230500818544381
+"Ventral LMM: pRF Size (Age Continuous)","category",3,360.12,18.135,5.56465017203405e-11
+"Ventral LMM: pRF Size (Age Continuous)","hemi",1,362.6,0.506,0.477356149664531
+"Ventral LMM: pRF Size (Age Continuous)","age:category",3,359.46,0.146,0.932333763936021
+"Ventral LMM: pRF Size (Age Continuous)","age:hemi",1,369.12,0.816,0.367023752835438
+"Ventral LMM: pRF Size (Age Continuous)","category:hemi",3,357.98,0.46,0.710116882653291
+"Ventral LMM: pRF Size (Age Continuous)","age:category:hemi",3,357.62,1.192,0.312757001188919

@@ -1,0 +1,23 @@
+"Analysis","model term","df1","df2","F.ratio","p.value"
+"LMM: Category Selectivity v FWHM (No Age)","fwhm",1,628.47,4.665,0.0311660237340547
+"LMM: Category Selectivity v FWHM (No Age)","stream",1,621.6,3.541,0.0603235560691733
+"LMM: Category Selectivity v FWHM (No Age)","category",2,620.53,69.901,4.18937893726602e-28
+"LMM: Category Selectivity v FWHM (No Age)","hemi",1,621.19,14.137,0.000186019184556165
+"LMM: Category Selectivity v FWHM (No Age)","fwhm:stream",1,625.18,1.123,0.289603528815155
+"LMM: Category Selectivity v FWHM (No Age)","fwhm:category",2,623.48,1.272,0.281050589920013
+"LMM: Category Selectivity v FWHM (No Age)","fwhm:hemi",1,626.1,0.253,0.615124368681669
+"LMM: Category Selectivity v FWHM (No Age)","stream:category",2,620.76,25.822,1.689681966276e-11
+"LMM: Category Selectivity v FWHM (No Age)","stream:hemi",1,620.37,0.398,0.528236242961096
+"LMM: Category Selectivity v FWHM (No Age)","category:hemi",2,619.81,2.155,0.116747694983598
+"LMM: Category Selectivity v FWHM (No Age)","fwhm:stream:category",2,624.3,5.03,0.00680753329413316
+"LMM: Category Selectivity v FWHM (No Age)","fwhm:stream:hemi",1,625.12,0.264,0.607878743693307
+"LMM: Category Selectivity v FWHM (No Age)","fwhm:category:hemi",2,622.42,0.621,0.537990403569065
+"LMM: Category Selectivity v FWHM (No Age)","stream:category:hemi",2,619.32,0.251,0.778305066354024
+"LMM: Category Selectivity v FWHM (No Age)","fwhm:stream:category:hemi",2,623.68,0.929,0.395342495366521
+"Ventral LMM: Category Selectivity v FWHM (No Age)","fwhm",1,323.53,15.633,9.45079955285324e-05
+"Ventral LMM: Category Selectivity v FWHM (No Age)","category",3,311.17,18.783,3.18995285832221e-11
+"Ventral LMM: Category Selectivity v FWHM (No Age)","hemi",1,314.76,4.098,0.0437702262890358
+"Ventral LMM: Category Selectivity v FWHM (No Age)","fwhm:category",3,316.64,2.54,0.0565064199866269
+"Ventral LMM: Category Selectivity v FWHM (No Age)","fwhm:hemi",1,322.29,0.712,0.399479923304848
+"Ventral LMM: Category Selectivity v FWHM (No Age)","category:hemi",3,312.87,2.595,0.0526019351412858
+"Ventral LMM: Category Selectivity v FWHM (No Age)","fwhm:category:hemi",3,319.37,0.962,0.411088733609455

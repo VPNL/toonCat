@@ -1,0 +1,45 @@
+"Analysis","model term","df1","df2","F.ratio","p.value"
+"LMM: Category Selectivity - Mean T-Value (Age Group)","group",1,41.39,3.649,0.0630448444459072
+"LMM: Category Selectivity - Mean T-Value (Age Group)","stream",1,748.43,8.321,0.00403196033367693
+"LMM: Category Selectivity - Mean T-Value (Age Group)","category",2,746.92,151.266,6.98465307797841e-56
+"LMM: Category Selectivity - Mean T-Value (Age Group)","hemi",1,746.72,16.336,5.85599924205685e-05
+"LMM: Category Selectivity - Mean T-Value (Age Group)","group:stream",1,748.43,2.911,0.0884113276616347
+"LMM: Category Selectivity - Mean T-Value (Age Group)","group:category",2,746.92,15.575,2.36028483912949e-07
+"LMM: Category Selectivity - Mean T-Value (Age Group)","group:hemi",1,746.72,2.155,0.142488798706745
+"LMM: Category Selectivity - Mean T-Value (Age Group)","stream:category",2,747.44,38.634,1.07931182714924e-16
+"LMM: Category Selectivity - Mean T-Value (Age Group)","stream:hemi",1,746.95,0.272,0.601999563694802
+"LMM: Category Selectivity - Mean T-Value (Age Group)","category:hemi",2,746.63,0.622,0.536883834276281
+"LMM: Category Selectivity - Mean T-Value (Age Group)","group:stream:category",2,747.44,1.656,0.191631029122941
+"LMM: Category Selectivity - Mean T-Value (Age Group)","group:stream:hemi",1,746.95,0.517,0.472521538110954
+"LMM: Category Selectivity - Mean T-Value (Age Group)","group:category:hemi",2,746.63,0.628,0.533855762029529
+"LMM: Category Selectivity - Mean T-Value (Age Group)","stream:category:hemi",2,746.65,0.283,0.753326306113108
+"LMM: Category Selectivity - Mean T-Value (Age Group)","group:stream:category:hemi",2,746.65,0.133,0.87589202027494
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Group)","group",1,44.48,3.38,0.0726920770382442
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Group)","category",3,358.77,33.336,4.98513732870825e-19
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Group)","hemi",1,361.51,4.293,0.0389763367797938
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Group)","group:category",3,358.77,5.098,0.00181850197852182
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Group)","group:hemi",1,361.51,2.172,0.141385656079848
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Group)","category:hemi",3,357.48,1.799,0.146972931076217
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Group)","group:category:hemi",3,357.48,1.165,0.322893231675186
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","age",1,41.56,5.177,0.0281109686473627
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","stream",1,748.46,6.675,0.00996557779097277
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","category",2,747.01,139.27,3.93062795178528e-52
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","hemi",1,746.6,14.457,0.000155138190221777
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","age:stream",1,748.94,3.267,0.0711023626609906
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","age:category",2,747.14,19.314,6.63242146004858e-09
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","age:hemi",1,746.94,3.042,0.0815430541688336
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","stream:category",2,747.33,38.909,8.41861903844823e-17
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","stream:hemi",1,746.83,0.078,0.779598675524441
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","category:hemi",2,746.75,1.05,0.350571493554728
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","age:stream:category",2,747.38,2.944,0.0532506677635531
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","age:stream:hemi",1,747.16,1.374,0.241559150034504
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","age:category:hemi",2,746.61,0.763,0.466597495355147
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","stream:category:hemi",2,746.74,0.415,0.660205056126248
+"LMM: Category Selectivity - Mean T-Value  (Age Continuous)","age:stream:category:hemi",2,746.67,0.139,0.870233731303501
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Continuous)","age",1,47.41,4.963,0.0306846934508906
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Continuous)","category",3,358.98,29.109,7.20647078409544e-17
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Continuous)","hemi",1,360.56,3.15,0.0767782055449843
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Continuous)","age:category",3,359.14,5.047,0.00194818423988655
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Continuous)","age:hemi",1,363.33,1.201,0.273920507936057
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Continuous)","category:hemi",3,357.63,2.729,0.0438425882313767
+"Ventral LMM: Category Selectivity - Mean T-Value  (Age Continuous)","age:category:hemi",3,357.5,0.855,0.464458159130387

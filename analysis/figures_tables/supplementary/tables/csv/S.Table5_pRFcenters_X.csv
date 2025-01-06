@@ -1,0 +1,45 @@
+"Analysis","model term","df1","df2","F.ratio","p.value"
+"LMM: pRF centers X-position (Age Group)","group",1,55.09,0.571,0.452940603313394
+"LMM: pRF centers X-position (Age Group)","stream",1,690.13,2.411,0.120912235555156
+"LMM: pRF centers X-position (Age Group)","category",2,683.85,6.027,0.0025424921381396
+"LMM: pRF centers X-position (Age Group)","hemi",1,688.85,2476.21,2.73717504476988e-230
+"LMM: pRF centers X-position (Age Group)","group:stream",1,690.13,2.184,0.139943478002919
+"LMM: pRF centers X-position (Age Group)","group:category",2,683.85,0.339,0.712466857842525
+"LMM: pRF centers X-position (Age Group)","group:hemi",1,688.85,5.177,0.0231881973676745
+"LMM: pRF centers X-position (Age Group)","stream:category",2,682.95,8.247,0.000289023954965794
+"LMM: pRF centers X-position (Age Group)","stream:hemi",1,688.54,43.983,6.69992793499475e-11
+"LMM: pRF centers X-position (Age Group)","category:hemi",2,682.49,13.702,1.46476913787129e-06
+"LMM: pRF centers X-position (Age Group)","group:stream:category",2,682.95,0.786,0.456277380622915
+"LMM: pRF centers X-position (Age Group)","group:stream:hemi",1,688.54,1.263,0.26150068932309
+"LMM: pRF centers X-position (Age Group)","group:category:hemi",2,682.49,0.098,0.906936953068448
+"LMM: pRF centers X-position (Age Group)","stream:category:hemi",2,681.73,84.935,1.15984690697318e-33
+"LMM: pRF centers X-position (Age Group)","group:stream:category:hemi",2,681.73,1.385,0.25097041595455
+"Ventral LMM: pRF centers X-position (Age Group)","group",1,48.03,0.109,0.743132350491892
+"Ventral LMM: pRF centers X-position (Age Group)","category",3,355.15,1.41,0.239615108332248
+"Ventral LMM: pRF centers X-position (Age Group)","hemi",1,359.18,1730.317,2.12103538173011e-139
+"Ventral LMM: pRF centers X-position (Age Group)","group:category",3,355.15,0.317,0.812750133885323
+"Ventral LMM: pRF centers X-position (Age Group)","group:hemi",1,359.18,0.027,0.868420997937714
+"Ventral LMM: pRF centers X-position (Age Group)","category:hemi",3,354.1,96.752,9.39457061497232e-46
+"Ventral LMM: pRF centers X-position (Age Group)","group:category:hemi",3,354.1,1.936,0.123375351682056
+"LMM: pRF centers X-position (Age Continuous)","age",1,56.42,0.201,0.655266203082997
+"LMM: pRF centers X-position (Age Continuous)","stream",1,691.49,4.119,0.0427764071444565
+"LMM: pRF centers X-position (Age Continuous)","category",2,684.27,7.377,0.000676373402686543
+"LMM: pRF centers X-position (Age Continuous)","hemi",1,690.03,2554.665,3.79225653024924e-234
+"LMM: pRF centers X-position (Age Continuous)","age:stream",1,691.8,0.866,0.352421588293463
+"LMM: pRF centers X-position (Age Continuous)","age:category",2,684.15,0.197,0.820840860929133
+"LMM: pRF centers X-position (Age Continuous)","age:hemi",1,687.67,3.559,0.0596436718408687
+"LMM: pRF centers X-position (Age Continuous)","stream:category",2,683.71,9.363,9.73956229769213e-05
+"LMM: pRF centers X-position (Age Continuous)","stream:hemi",1,688.14,43.114,1.01779672089046e-10
+"LMM: pRF centers X-position (Age Continuous)","category:hemi",2,682.96,13.954,1.14878584337052e-06
+"LMM: pRF centers X-position (Age Continuous)","age:stream:category",2,682.97,1.116,0.328224991462605
+"LMM: pRF centers X-position (Age Continuous)","age:stream:hemi",1,690.17,0.002,0.967569742883856
+"LMM: pRF centers X-position (Age Continuous)","age:category:hemi",2,682.51,0.241,0.785545660233045
+"LMM: pRF centers X-position (Age Continuous)","stream:category:hemi",2,682.09,87.444,1.55874392706133e-34
+"LMM: pRF centers X-position (Age Continuous)","age:stream:category:hemi",2,682.12,0.311,0.733091886690703
+"Ventral LMM: pRF centers X-position (Age Continuous)","age",1,50.81,0.164,0.687451111600123
+"Ventral LMM: pRF centers X-position (Age Continuous)","category",3,355.8,1.467,0.223166766161507
+"Ventral LMM: pRF centers X-position (Age Continuous)","hemi",1,357.43,1876.079,2.76425943411125e-144
+"Ventral LMM: pRF centers X-position (Age Continuous)","age:category",3,355.49,0.368,0.775897877123271
+"Ventral LMM: pRF centers X-position (Age Continuous)","age:hemi",1,362.09,0.733,0.392606848015566
+"Ventral LMM: pRF centers X-position (Age Continuous)","category:hemi",3,354.45,98.269,2.64126587576837e-46
+"Ventral LMM: pRF centers X-position (Age Continuous)","age:category:hemi",3,354.53,1.742,0.158091810979868

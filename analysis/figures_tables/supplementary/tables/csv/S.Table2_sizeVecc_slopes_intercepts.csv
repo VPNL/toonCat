@@ -1,0 +1,15 @@
+"Analysis","model term","df1","df2","F.ratio","p.value"
+"LMM: Size v. Ecc Slopes","group",1,33,0.018,0.89330113819535
+"LMM: Size v. Ecc Slopes","ROI",2,165,79.216,7.680551044528e-25
+"LMM: Size v. Ecc Slopes","hemi",1,165,0.083,0.77333377354069
+"LMM: Size v. Ecc Slopes","group:ROI",2,165,0.694,0.50095824906204
+"LMM: Size v. Ecc Slopes","group:hemi",1,165,0.145,0.703483671463669
+"LMM: Size v. Ecc Slopes","ROI:hemi",2,165,2.689,0.0709012525213446
+"LMM: Size v. Ecc Slopes","group:ROI:hemi",2,165,1.701,0.185667584292567
+"LMM: Size v. Ecc Intercepts","group",1,33,0.291,0.593089903285735
+"LMM: Size v. Ecc Intercepts","ROI",2,165,158.376,4.0691454920136e-39
+"LMM: Size v. Ecc Intercepts","hemi",1,165,11.113,0.00105855657498745
+"LMM: Size v. Ecc Intercepts","group:ROI",2,165,0.983,0.37643511655741
+"LMM: Size v. Ecc Intercepts","group:hemi",1,165,0.055,0.815006349918699
+"LMM: Size v. Ecc Intercepts","ROI:hemi",2,165,2.651,0.0735852663700352
+"LMM: Size v. Ecc Intercepts","group:ROI:hemi",2,165,0.267,0.766308332530385

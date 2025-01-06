@@ -1,0 +1,29 @@
+"Analysis","model term","df1","df2","F.ratio","p.value"
+"LMM: pRF centers X-position (Age Group)","group",1,40,0.009,0.924146359862211
+"LMM: pRF centers X-position (Age Group)","ROI",2,200,0.264,0.767943261314699
+"LMM: pRF centers X-position (Age Group)","hemi",1,200,10756.457,7.77727679810562e-176
+"LMM: pRF centers X-position (Age Group)","group:ROI",2,200,0.374,0.688514360587215
+"LMM: pRF centers X-position (Age Group)","group:hemi",1,200,0.028,0.867448913719267
+"LMM: pRF centers X-position (Age Group)","ROI:hemi",2,200,1.202,0.302770380251543
+"LMM: pRF centers X-position (Age Group)","group:ROI:hemi",2,200,1.066,0.346328403206826
+"LMM: pRF centers Y-position (Age Group)","group",1,40,0.011,0.91689573295734
+"LMM: pRF centers Y-position (Age Group)","ROI",2,200,0.358,0.699421949154711
+"LMM: pRF centers Y-position (Age Group)","hemi",1,200,0.683,0.40954951416462
+"LMM: pRF centers Y-position (Age Group)","group:ROI",2,200,2.459,0.0881324863994589
+"LMM: pRF centers Y-position (Age Group)","group:hemi",1,200,0.274,0.601317344271389
+"LMM: pRF centers Y-position (Age Group)","ROI:hemi",2,200,1.214,0.299180389653711
+"LMM: pRF centers Y-position (Age Group)","group:ROI:hemi",2,200,1.152,0.318149679432945
+"LMM: pRF centers Eccentricity (Age Group)","group",1,40,0.05,0.823443395079422
+"LMM: pRF centers Eccentricity (Age Group)","ROI",2,200,0.721,0.48740255725054
+"LMM: pRF centers Eccentricity (Age Group)","hemi",1,200,22.907,3.2992251816982e-06
+"LMM: pRF centers Eccentricity (Age Group)","group:ROI",2,200,1.911,0.150691666381197
+"LMM: pRF centers Eccentricity (Age Group)","group:hemi",1,200,0.014,0.90445444576235
+"LMM: pRF centers Eccentricity (Age Group)","ROI:hemi",2,200,0.14,0.869073905847866
+"LMM: pRF centers Eccentricity (Age Group)","group:ROI:hemi",2,200,0.748,0.474778641112483
+"LMM: pRF size (Age Group)","group",1,40,0.154,0.697001616069722
+"LMM: pRF size (Age Group)","ROI",2,200,434.138,1.71652754687299e-73
+"LMM: pRF size (Age Group)","hemi",1,200,10.789,0.00120567189177916
+"LMM: pRF size (Age Group)","group:ROI",2,200,0.334,0.716642366539425
+"LMM: pRF size (Age Group)","group:hemi",1,200,0.038,0.846173646111396
+"LMM: pRF size (Age Group)","ROI:hemi",2,200,8.805,0.000216427663324592
+"LMM: pRF size (Age Group)","group:ROI:hemi",2,200,1.016,0.363766429474975

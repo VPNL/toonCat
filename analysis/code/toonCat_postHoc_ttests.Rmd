@@ -1,0 +1,81 @@
+---
+title: "toonCat_postHoc_ttests"
+author: "Jewelia K. Yao"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+TOONCAT POST-HOC ANALYSES
+Post-hoc t-tests conducted for the toonCat manuscript. Each post-hoc t-test compares age groups (adolescents, adults)for each hemisphere-ROI region. Post-hoc testing was conducted for any LMM that showed significant age group effects or age group interaction effects.
+
+# Setup
+```{r Setup, warning=F, message=F, echo=FALSE}
+# Setup file
+setwd("~/Desktop/toonCat/analysis")
+source("~/Desktop/toonCat/analysis/code/toonCat_analysisSetup.R")
+```
+
+# Post-Hoc T-Test Function: splitting df, performing t-tests, extracting parameters, saving table
+```{r}
+perform_and_save_t_tests <- function(data, split_var, group_var, measure_var, output_file) {
+  # Splitting by hemisphere and ROI
+  data_filtered <- data %>%
+    filter(hemi %in% c("lh", "rh"), !(ROI %in% c("blank", "blank1", "blank2", "blank3", "blank4"))) %>%
+    na.omit()
+  split_data <- split(data_filtered, list(data_filtered$hemi, data_filtered$ROI))
+
+  # Function to perform t-test and return parameters
+  perform_t_test <- function(data) {
+    group_data <- data %>% filter(group == "adolescents") %>% pull(!!sym(measure_var))
+    adult_data <- data %>% filter(group == "Adults") %>% pull(!!sym(measure_var))
+    if (length(group_data) > 0 & length(adult_data) > 0) {
+      t_test_result <- t.test(group_data, adult_data, var.equal = FALSE)
+      return(tibble(
+        hemi = unique(data$hemi),
+        ROI = unique(data$ROI),
+        t_statistic = t_test_result$statistic,
+        p_value = t_test_result$p.value,
+        df = t_test_result$parameter,
+        mean_adolescents = mean(group_data, na.rm = TRUE),
+        mean_Adults = mean(adult_data, na.rm = TRUE)
+      ))
+    } else {
+      return(NULL)
+    }
+  }
+
+  # Applying t-test function to each split dataframe and combining results into a single table
+  t_test_results <- bind_rows(lapply(split_data, perform_t_test))
+
+  # Displaying and saving the results
+  t_test_results %>%
+    kable(format = 'html', padding = '1L', booktabs = TRUE, linesep = "\\addlinespace", digits = 10) %>%
+    kable_styling(full_width = FALSE) %>%
+    row_spec(which(as.numeric(t_test_results$p_value) < 0.05), bold = TRUE) %>%
+    save_kable(file = output_file)
+  
+  print(t_test_results)
+}
+```
+
+# pRF Size
+```{r}
+# Example usage
+perform_and_save_t_tests(df.centers_cat_latdors, "size", "group", "size", "~/Desktop/toonCat/analysis/figures_tables/posthoc/pRFsize_t_test_unequalVariance.png")
+```
+
+# Total FWHM
+```{r}
+perform_and_save_t_tests(df.CoV_cat_latdors, "fwhm", "group", "fwhm", "~/Desktop/toonCat/analysis//figures_tables/posthoc/CoV_totalFWHM_t_test_unequalVariance.png")
+```
+
+# Category Selectivity
+```{r}
+perform_and_save_t_tests(df.cat, "meanT", "group", "meanT", "~/Desktop/toonCat/analysis/figures_tables/posthoc/catSelectivity_t_test_unequalVariance_10mm.png")
+```
+
+# ROI Size
+```{r}
+perform_and_save_t_tests(df.ROIsize_cat_latdors, "totalvox", "group", "totalvox", "~/Desktop/toonCat/analysis/figures_tables/posthoc/ROIsize_t-tests.png")
+```
+

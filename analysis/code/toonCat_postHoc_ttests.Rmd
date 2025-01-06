@@ -17,7 +17,7 @@ source("~/Desktop/toonCat/analysis/code/toonCat_analysisSetup.R")
 
 # Post-Hoc T-Test Function: splitting df, performing t-tests, extracting parameters, saving table
 ```{r}
-perform_and_save_t_tests <- function(data, split_var, group_var, measure_var, output_file) {
+perform_and_save_t_tests <- function(data, split_var, group_var, measure_var, output_file_base) {
   # Splitting by hemisphere and ROI
   data_filtered <- data %>%
     filter(hemi %in% c("lh", "rh"), !(ROI %in% c("blank", "blank1", "blank2", "blank3", "blank4"))) %>%
@@ -47,35 +47,41 @@ perform_and_save_t_tests <- function(data, split_var, group_var, measure_var, ou
   # Applying t-test function to each split dataframe and combining results into a single table
   t_test_results <- bind_rows(lapply(split_data, perform_t_test))
 
-  # Displaying and saving the results
+  # Displaying and saving the results in HTML
+  png_file <- paste0(output_file_base, ".png")
   t_test_results %>%
     kable(format = 'html', padding = '1L', booktabs = TRUE, linesep = "\\addlinespace", digits = 10) %>%
     kable_styling(full_width = FALSE) %>%
     row_spec(which(as.numeric(t_test_results$p_value) < 0.05), bold = TRUE) %>%
-    save_kable(file = output_file)
-  
+    save_kable(file = png_file)
+
+  # Saving the results as CSV
+  csv_file <- paste0(output_file_base, ".csv")
+  write.csv(t_test_results, csv_file, row.names = FALSE)
+
   print(t_test_results)
 }
+
+
 ```
 
 # pRF Size
 ```{r}
-# Example usage
-perform_and_save_t_tests(df.centers_cat_latdors, "size", "group", "size", "~/Desktop/toonCat/analysis/figures_tables/posthoc/pRFsize_t_test_unequalVariance.png")
+perform_and_save_t_tests(df.centers_cat_latdors, "size", "group", "size", "~/Desktop/toonCat/analysis/figures_tables/posthoc/pRFsize_t_test_unequalVariance")
 ```
 
 # Total FWHM
 ```{r}
-perform_and_save_t_tests(df.CoV_cat_latdors, "fwhm", "group", "fwhm", "~/Desktop/toonCat/analysis//figures_tables/posthoc/CoV_totalFWHM_t_test_unequalVariance.png")
+perform_and_save_t_tests(df.CoV_cat_latdors, "fwhm", "group", "fwhm", "~/Desktop/toonCat/analysis//figures_tables/posthoc/CoV_totalFWHM_t_test_unequalVariance")
 ```
 
 # Category Selectivity
 ```{r}
-perform_and_save_t_tests(df.cat, "meanT", "group", "meanT", "~/Desktop/toonCat/analysis/figures_tables/posthoc/catSelectivity_t_test_unequalVariance_10mm.png")
+perform_and_save_t_tests(df.cat, "meanT", "group", "meanT", "~/Desktop/toonCat/analysis/figures_tables/posthoc/catSelectivity_t_test_unequalVariance_10mm")
 ```
 
 # ROI Size
 ```{r}
-perform_and_save_t_tests(df.ROIsize_cat_latdors, "totalvox", "group", "totalvox", "~/Desktop/toonCat/analysis/figures_tables/posthoc/ROIsize_t-tests.png")
+perform_and_save_t_tests(df.ROIsize_cat_latdors, "totalvox", "group", "totalvox", "~/Desktop/toonCat/analysis/figures_tables/posthoc/ROIsize_t-tests")
 ```
 

@@ -24,29 +24,29 @@ library(fs)
 # DATA ############################################################################################################
 # Load data
 ## Age info
-df.ages = read_csv("data/subject_ages_mrVista.csv")
-df.ages_catSelect = read_csv("data/subject_ages_category.csv")
+df.ages = read_csv("./data/subject_ages_mrVista.csv")
+df.ages_catSelect = read_csv("./data/subject_ages_category.csv")
 
 ## pRF size v eccentricity (slopes, intercepts)
-sizeEcc_ventral = read.csv("data/pRF_SizeEcc_toonCat_KidsTeensAdults_toonROIs.csv")
-sizeEcc_lateral = read.csv("data/pRF_SizeEcc_toonCat_lateral_JC_KidsTeensAdults_toonROIs.csv")
+sizeEcc_ventral = read.csv("./data/pRF_SizeEcc_toonCat_KidsTeensAdults_toonROIs.csv")
+sizeEcc_lateral = read.csv("./data/pRF_SizeEcc_toonCat_lateral_JC_KidsTeensAdults_toonROIs.csv")
 sizeEcc = bind_rows(sizeEcc_lateral, sizeEcc_ventral)
 
 ## pRF centers
-centers_lateral = read.csv("data/pRFCenters_KidsTeensAdults_lateralROIs_pSTS_MTG_AdultAvg.csv")
-centers_ventral = read.csv("data/pRFCenters_KidsTeensAdults_ret_catROIs.csv")
+centers_lateral = read.csv("./data/pRFCenters_KidsTeensAdults_lateralROIs_pSTS_MTG_AdultAvg.csv")
+centers_ventral = read.csv("./data/pRFCenters_KidsTeensAdults_ret_catROIs.csv")
 centers = bind_rows(centers_lateral, centers_ventral)
 
 ## pRF coverage
-CoV = read.csv("data/pRF_CoVCenters_KidsTeensAdults_allROIs.csv")
+CoV = read.csv("./data/pRF_CoVCenters_KidsTeensAdults_allROIs.csv")
 
 ## Category selectivity
-category = read.csv("data/catSelectivity_3Runs_diskROIs_10mm.csv") #original output
-df.category = read.csv("data/categorySelectivity.csv") #wrangled output
+category = read.csv("./data/catSelectivity_3Runs_diskROIs_10mm.csv") #original output
+df.category = read.csv("./data/categorySelectivity.csv") #wrangled output
 
 ## ROI size
-ROIsize_lateral = read.csv("data/pRFCoVCenters_KidsTeensAdults_lateralROIs_zerosSize.csv")
-ROIsize_ventral = read.csv("data/pRFCoVCenters_KidsTeensAdults_ret_catROIs.csv")
+ROIsize_lateral = read.csv("./data/pRFCoVCenters_KidsTeensAdults_lateralROIs_zerosSize.csv")
+ROIsize_ventral = read.csv("./data/pRFCoVCenters_KidsTeensAdults_ret_catROIs.csv")
 ROIsize = bind_rows(ROIsize_lateral, ROIsize_ventral)
 
 # PLOT/DF VARIABLES ###############################################################################################

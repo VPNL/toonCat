@@ -1,0 +1,531 @@
+---
+title: "toonCat_fig6"
+author: "Jewelia K. Yao"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r Setup}
+source("./code/toonCat_analysisSetup.R")
+output_directory <- "./results/figures/fig6"
+```
+
+```{r}
+# ---- Polar fingerprint (clockwise; split Y into Ypos/Yneg) ----
+# Adults = filled polygon (solid, underneath)
+# Adolescents = dotted outline (on top)
+# Needs:
+#   df.centers_cat: ROI, hemi (lh/rh), group (adolescents/Adults), centerY, centerR, size
+#   df.fig4 OR df.cat_FWHM: ROI, hemi, group, fwhm
+#   df.ROIsize_cat_latdors: ROI, hemi, group, totalvox
+# Writes: <output_directory>/fig3/fingerprint_polar_clockwise_ROIsize.png
+
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(stringr); library(ggplot2); library(fs); library(purrr)
+})
+
+# ---------- output dir ----------
+if (!dir_exists(output_directory)) dir_create(output_directory)
+out_dir <- file.path(output_directory); if (!dir_exists(out_dir)) dir_create(out_dir)
+
+# ---------- ROI order (Words → Bodies → Faces → Places; ventral then lateral/dorsal) ----------
+roi_levels <- c(
+  # Words (ventral)
+  "pOTS_words","mOTS_words",
+  # Bodies (ventral → lateral)
+  "OTS_bodies","LOS_limbs","ITG_limbs","MTG_limbs",
+  # Faces (ventral → lateral)
+  "IOG_faces","pFus_faces","mFus_faces","pSTS_faces",
+  # Places (ventral → lat/dorsal)
+  "CoS_places","MOG_places","IPS_places"
+)
+
+# ---------- colors by category × group ----------
+pal_faces  <- c(Adults="#8B0000", adolescents="#FF0000")
+pal_bodies <- c(Adults="#BA8E23", adolescents="#E4CD04")
+pal_places <- c(Adults="#013220", adolescents="#008000")
+pal_words  <- c(Adults="#000066", adolescents="#2323FF")
+
+# ---------- axis maxima (display ranges) ----------
+y_lim    <- 6
+ecc_lim  <- 12
+size_lim <- 30
+fwhm_lim <- 30
+vox_lim  <- 750  # <-- fixed ROI size range
+vox_lim_disp <- 750
+
+clamp  <- function(x, lo, hi) pmax(pmin(x, hi), lo)
+deg2rad <- function(a) a*pi/180
+
+# ---------- spoke directions (clockwise, start at Ypos) ----------
+# Ypos=+90°, ROIvox=+45°, Ecc=-45°, Yneg=-90°, Size=-135°, FWHM=+135°
+ang  <- c(Ypos=90, ROIvox=45, Ecc=-45, Yneg=-90, Size=-135, FWHM=135)
+spokes <- tibble(axis=names(ang), cx=cos(deg2rad(ang)), sy=sin(deg2rad(ang)))
+
+# ---------- helpers ----------
+cat_from_roi <- function(roi){
+  case_when(
+    str_detect(roi, "words")            ~ "words",
+    str_detect(roi, "limbs|bodies")     ~ "bodies",
+    str_detect(roi, "faces")            ~ "faces",
+    str_detect(roi, "places")           ~ "places",
+    TRUE ~ "other"
+  )
+}
+
+# ---------- MEANS from centers (Y, Ecc, Size) ----------
+core_means <- df.centers_cat %>%
+  filter(hemi %in% c("lh","rh"),
+         group %in% c("adolescents","Adults")) %>%
+  mutate(ROI = str_trim(as.character(ROI))) %>%
+  filter(ROI %in% roi_levels) %>%
+  group_by(ROI, hemi, group) %>%
+  summarise(
+    y    = mean(centerY, na.rm = TRUE),
+    ecc  = mean(centerR,  na.rm = TRUE),
+    size = mean(size,     na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# ---------- FWHM (prefer df.fig4, else df.cat_FWHM) ----------
+fwhm_src <- if (exists("df.fig4")) df.fig4 else df.cat_FWHM
+fwhm_means <- fwhm_src %>%
+  filter(hemi %in% c("lh","rh"),
+         group %in% c("adolescents","Adults")) %>%
+  mutate(ROI = str_trim(as.character(ROI))) %>%
+  filter(ROI %in% roi_levels) %>%
+  group_by(ROI, hemi, group) %>%
+  summarise(fwhm = mean(fwhm, na.rm = TRUE), .groups = "drop")
+
+# ---------- ROI SIZE (voxels) from df.ROIsize_cat_latdors ----------
+roi_size_means <- df.ROIsize_cat_latdors %>%
+  filter(hemi %in% c("lh","rh"),
+         group %in% c("adolescents","Adults")) %>%
+  mutate(ROI = str_trim(as.character(ROI))) %>%
+  filter(ROI %in% roi_levels) %>%
+  group_by(ROI, hemi, group) %>%
+  summarise(totalvox = mean(totalvox, na.rm = TRUE), .groups = "drop")
+
+# ---------- Join & clamp ----------
+mean_df <- core_means %>%
+  inner_join(fwhm_means,     by = c("ROI","hemi","group")) %>%
+  inner_join(roi_size_means, by = c("ROI","hemi","group")) %>%
+  mutate(
+    ROI   = factor(ROI, levels = roi_levels, ordered = TRUE),
+    hemi  = factor(hemi, levels = c("lh","rh")),
+    group = factor(group, levels = c("Adults","adolescents")),  # Adults under, adolescents over
+    y     = clamp(y, -y_lim, y_lim),
+    ecc   = pmin(ecc,  ecc_lim),
+    size  = pmin(size, size_lim),
+    fwhm  = pmin(fwhm, fwhm_lim),
+    vox   = pmin(totalvox, vox_lim),
+    category = cat_from_roi(as.character(ROI)),
+    line_col = case_when(
+      category == "faces"  ~ pal_faces[as.character(group)],
+      category == "bodies" ~ pal_bodies[as.character(group)],
+      category == "places" ~ pal_places[as.character(group)],
+      category == "words"  ~ pal_words[as.character(group)],
+      TRUE ~ "#555555"
+    )
+  )
+
+# ---------- Split Y into Ypos/Yneg, normalize all spokes to 0..1 ----------
+norm_df <- mean_df %>%
+  transmute(
+    ROI, hemi, group, line_col,
+    r_Ypos  = pmax(y, 0)  / y_lim,
+    r_Yneg  = pmax(-y, 0) / y_lim,
+    r_Ecc   = ecc  / ecc_lim,
+    r_Size  = size / size_lim,
+    r_FWHM  = fwhm / fwhm_lim,
+    r_ROIvx = vox  / vox_lim
+  )
+
+# ---------- Build polygon points (clockwise: Ypos → ROIvox → Ecc → Yneg → Size → FWHM → Ypos) ----------
+axes_order <- c("Ypos","ROIvox","Ecc","Yneg","Size","FWHM")
+
+build_one_poly <- function(row) {
+  vals <- c(
+    Ypos = row$r_Ypos, ROIvox = row$r_ROIvx, Ecc = row$r_Ecc,
+    Yneg = row$r_Yneg, Size   = row$r_Size,  FWHM = row$r_FWHM
+  )
+  df <- tibble(axis = axes_order, r = as.numeric(vals[axes_order])) %>%
+    left_join(spokes, by = "axis") %>%
+    mutate(x = r * cx, y = r * sy)
+  bind_rows(df, df[1, , drop = FALSE]) %>%  # close polygon
+    mutate(ROI = row$ROI, hemi = row$hemi, group = row$group, line_col = row$line_col)
+}
+
+poly_pts <- norm_df %>%
+  arrange(ROI, hemi, group) %>%
+  split(list(norm_df$ROI, norm_df$hemi, norm_df$group), drop = TRUE) %>%
+  purrr::map_dfr(~ build_one_poly(.x[1, ]))
+
+# Endpoints (drop the closing duplicate row)
+end_pts <- poly_pts %>%
+  group_by(ROI, hemi, group) %>%
+  mutate(idx = row_number()) %>%
+  filter(idx < max(idx)) %>%
+  select(-idx) %>%
+  ungroup()
+
+# ---------- rings, rays, labels ----------
+axes_df <- tidyr::expand_grid(
+  ROI  = factor(roi_levels, levels = roi_levels, ordered = TRUE),
+  hemi = factor(c("lh","rh"), levels = c("lh","rh"))
+)
+
+rings <- tibble(r = c(0.25, 0.5, 0.75, 1.0)) %>%
+  tidyr::crossing(theta = seq(0, 2*pi, length.out = 361)) %>%
+  mutate(x = r * cos(theta), y = r * sin(theta)) %>%
+  tidyr::crossing(axes_df)
+
+rays <- spokes %>%
+  mutate(x0 = 0, y0 = 0, x1 = cx, y1 = sy) %>%
+  tidyr::crossing(axes_df)
+
+end_labels <- bind_rows(
+  tibble(axis="Ypos",   lab=sprintf("%d",  y_lim),        x=cos(deg2rad( 90)),  y=sin(deg2rad( 90))),
+  tibble(axis="Yneg",   lab=sprintf("%d", -y_lim),        x=cos(deg2rad(-90)),  y=sin(deg2rad(-90))),
+  tibble(axis="Ecc",    lab=sprintf("%d",  ecc_lim),      x=cos(deg2rad(-45)),  y=sin(deg2rad(-45))),
+  tibble(axis="ROIvox", lab=sprintf("%d",  vox_lim_disp), x=cos(deg2rad( 45)),  y=sin(deg2rad( 45))),
+  tibble(axis="FWHM",   lab=sprintf("%d",  fwhm_lim),     x=cos(deg2rad(135)),  y=sin(deg2rad(135))),
+  tibble(axis="Size",   lab=sprintf("%d",  size_lim),     x=cos(deg2rad(-135)), y=sin(deg2rad(-135)))
+) %>% tidyr::crossing(axes_df)
+
+lab_hjust <- function(x) ifelse(x < -1e-6, 1.05, ifelse(x > 1e-6, -0.05, 0.5))
+lab_vjust <- function(y) ifelse(y >  1e-6, -0.35, ifelse(y < -1e-6, 1.35, 0.5))
+
+# ---------- draw ----------
+n_cols <- length(roi_levels); n_rows <- 2
+panel_w_in <- 1.9; panel_h_in <- 1.9
+w_in <- n_cols*panel_w_in + 1.2; h_in <- n_rows*panel_h_in + 1.2
+
+if (requireNamespace("ragg", quietly=TRUE)) {
+  ragg::agg_png(file.path(out_dir, "F6_fingerprint_polar_clockwise_teensFilled.png"),
+                width=w_in, height=h_in, units="in", res=300)
+} else {
+  png(file.path(out_dir, "fingerprint_polar_clockwise_ROIsize.png"),
+      width=w_in, height=h_in, units="in", res=300)
+}
+
+ggplot() +
+  # rings & rays
+  geom_path(data = rings, aes(x = x, y = y, group = interaction(r, ROI, hemi)),
+            color = "gray75", linewidth = 0.4) +
+  geom_segment(data = rays, aes(x = x0, y = y0, xend = x1, yend = y1),
+               color = "gray75", linewidth = 0.6) +
+  # axis-end labels
+  geom_text(data = end_labels, aes(x = x, y = y, label = lab),
+            size = 6, color = "gray35",
+            vjust = lab_vjust(end_labels$y),
+            hjust = lab_hjust(end_labels$x)) +
+  # adolescents = filled polygon, no outline
+  geom_polygon(
+    data = poly_pts %>% dplyr::filter(group == "adolescents"),
+    aes(x = x, y = y, group = interaction(ROI, hemi, group), fill = line_col),
+    color = NA, alpha = 0.5
+  ) +
+  scale_fill_identity() +
+  # Adults = solid outline only
+  geom_path(
+    data = poly_pts %>% dplyr::filter(group == "Adults"),
+    aes(x = x, y = y, group = interaction(ROI, hemi, group), colour = line_col),
+    linewidth = 1.7, lineend = "round", linetype = "solid"
+  ) +
+  # endpoints (same colors)
+  geom_point(
+    data = end_pts,
+    aes(x = x, y = y, colour = line_col),
+    size = 2, stroke = 0.3
+  ) +
+  scale_colour_identity() +
+  coord_equal(xlim = c(-1.12, 1.12), ylim = c(-1.12, 1.12), expand = FALSE, clip = "off") +
+  labs(x = NULL, y = NULL) +
+  facet_grid(hemi ~ ROI, drop = TRUE) +
+  theme_minimal() +
+  theme(
+    legend.position  = "none",
+    strip.background = element_blank(),
+    strip.text       = element_blank(),
+    panel.grid       = element_blank(),
+    axis.text        = element_blank(),
+    axis.ticks       = element_blank(),
+    panel.spacing.x  = unit(1.4, "lines"),
+    panel.spacing.y  = unit(5, "lines"),
+    plot.margin      = margin(10, 24, 10, 24)
+  )
+
+dev.off()
+
+```
+
+```{r}
+# ---- Polar fingerprint (clockwise; split Y into Ypos/Yneg) ----
+# Adults = solid line (solid, underneath)
+# Adolescents = filled  (on top)
+# Needs:
+#   df.centers_cat: ROI, hemi (lh/rh), group (adolescents/Adults), centerY, centerR, size
+#   df.fig4 OR df.cat_FWHM: ROI, hemi, group, fwhm
+#   df.ROIsize_cat_latdors: ROI, hemi, group, totalvox
+# Writes: <output_directory>/F6_fingerprint_polar_clockwise_ROIvxRel.png
+
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(stringr); library(ggplot2); library(fs); library(purrr)
+})
+
+# ---------- output dir ----------
+if (!dir_exists(output_directory)) dir_create(output_directory)
+out_dir <- file.path(output_directory); if (!dir_exists(out_dir)) dir_create(out_dir)
+
+# ---------- ROI order (Words → Bodies → Faces → Places; ventral then lateral/dorsal) ----------
+roi_levels <- c(
+  # Words (ventral)
+  "pOTS_words","mOTS_words",
+  # Bodies (ventral → lateral)
+  "OTS_bodies","LOS_limbs","ITG_limbs","MTG_limbs",
+  # Faces (ventral → lateral)
+  "IOG_faces","pFus_faces","mFus_faces","pSTS_faces",
+  # Places (ventral → lat/dorsal)
+  "CoS_places","MOG_places","IPS_places"
+)
+
+# ---------- colors by category × group ----------
+pal_faces  <- c(Adults="#8B0000", adolescents="#FF0000")
+pal_bodies <- c(Adults="#AB6B00", adolescents="#FFB302")
+pal_places <- c(Adults="#013220", adolescents="green")
+pal_words  <- c(Adults="#000066", adolescents="#2323FF")
+
+# ---------- axis maxima (display ranges) ----------
+y_lim    <- 6
+ecc_lim  <- 12
+size_lim <- 30
+fwhm_lim <- 30
+
+# ROI size normalization (relative to Adults within each ROI × hemi)
+# Adults = 1.0 (100%). We map [vox_rel_lo, vox_rel_hi] -> [0, 1] on the spoke.
+vox_rel_lo <- 0.50   # 50% of adult size -> radius 0
+vox_rel_hi <- 1.50   # 150% of adult size -> radius 1
+vox_rel_label_max <- sprintf("%d", round(100 * vox_rel_hi))  # for axis-end label
+
+clamp   <- function(x, lo, hi) pmax(pmin(x, hi), lo)
+deg2rad <- function(a) a*pi/180
+
+# ---------- spoke directions (clockwise, start at Ypos) ----------
+# Ypos=+90°, ROIvox=+45°, Ecc=-45°, Yneg=-90°, Size=-135°, FWHM=+135°
+ang  <- c(Ypos=90, ROIvox=45, Ecc=-45, Yneg=-90, Size=-135, FWHM=135)
+spokes <- tibble(axis=names(ang), cx=cos(deg2rad(ang)), sy=sin(deg2rad(ang)))
+
+# ---------- helpers ----------
+cat_from_roi <- function(roi){
+  case_when(
+    str_detect(roi, "words")            ~ "words",
+    str_detect(roi, "limbs|bodies")     ~ "bodies",
+    str_detect(roi, "faces")            ~ "faces",
+    str_detect(roi, "places")           ~ "places",
+    TRUE ~ "other"
+  )
+}
+
+# ---------- MEANS from centers (Y, Ecc, Size) ----------
+core_means <- df.centers_cat %>%
+  filter(hemi %in% c("lh","rh"),
+         group %in% c("adolescents","Adults")) %>%
+  mutate(ROI = str_trim(as.character(ROI))) %>%
+  filter(ROI %in% roi_levels) %>%
+  group_by(ROI, hemi, group) %>%
+  summarise(
+    y    = mean(centerY, na.rm = TRUE),
+    ecc  = mean(centerR,  na.rm = TRUE),
+    size = mean(size,     na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# ---------- FWHM (prefer df.fig4, else df.cat_FWHM) ----------
+fwhm_src <- if (exists("df.fig4")) df.fig4 else df.cat_FWHM
+fwhm_means <- fwhm_src %>%
+  filter(hemi %in% c("lh","rh"),
+         group %in% c("adolescents","Adults")) %>%
+  mutate(ROI = str_trim(as.character(ROI))) %>%
+  filter(ROI %in% roi_levels) %>%
+  group_by(ROI, hemi, group) %>%
+  summarise(fwhm = mean(fwhm, na.rm = TRUE), .groups = "drop")
+
+# ---------- ROI SIZE (voxels) from df.ROIsize_cat_latdors ----------
+roi_size_means <- df.ROIsize_cat_latdors %>%
+  filter(hemi %in% c("lh","rh"),
+         group %in% c("adolescents","Adults")) %>%
+  mutate(ROI = str_trim(as.character(ROI))) %>%
+  filter(ROI %in% roi_levels) %>%
+  group_by(ROI, hemi, group) %>%
+  summarise(totalvox = mean(totalvox, na.rm = TRUE), .groups = "drop")
+
+# Adult baseline per ROI × hemi (for relative normalization)
+adult_vox_base <- roi_size_means %>%
+  filter(group == "Adults") %>%
+  select(ROI, hemi, adult_vox = totalvox)
+
+# ---------- Join & clamp ----------
+mean_df <- core_means %>%
+  inner_join(fwhm_means,     by = c("ROI","hemi","group")) %>%
+  inner_join(roi_size_means, by = c("ROI","hemi","group")) %>%
+  left_join(adult_vox_base,  by = c("ROI","hemi")) %>%
+  mutate(
+    ROI   = factor(ROI, levels = roi_levels, ordered = TRUE),
+    hemi  = factor(hemi, levels = c("lh","rh")),
+    group = factor(group, levels = c("Adults","adolescents")),  # Adults under, adolescents over
+    y     = clamp(y, -y_lim, y_lim),
+    ecc   = pmin(ecc,  ecc_lim),
+    size  = pmin(size, size_lim),
+    fwhm  = pmin(fwhm, fwhm_lim),
+
+    # Relative ROI size: Adults = 1.0
+    vox_rel = totalvox / adult_vox,
+    vox_rel = clamp(vox_rel, vox_rel_lo, vox_rel_hi),
+
+    # Map relative size range to 0..1 radius for the spoke
+    r_ROIvx = (vox_rel - vox_rel_lo) / (vox_rel_hi - vox_rel_lo),
+
+    category = cat_from_roi(as.character(ROI)),
+    line_col = case_when(
+      category == "faces"  ~ pal_faces[as.character(group)],
+      category == "bodies" ~ pal_bodies[as.character(group)],
+      category == "places" ~ pal_places[as.character(group)],
+      category == "words"  ~ pal_words[as.character(group)],
+      TRUE ~ "#555555"
+    )
+  )
+
+# ---------- Split Y into Ypos/Yneg, normalize all spokes to 0..1 ----------
+norm_df <- mean_df %>%
+  transmute(
+    ROI, hemi, group, line_col,
+    r_Ypos  = pmax(y, 0)  / y_lim,
+    r_Yneg  = pmax(-y, 0) / y_lim,
+    r_Ecc   = ecc  / ecc_lim,
+    r_Size  = size / size_lim,
+    r_FWHM  = fwhm / fwhm_lim,
+    r_ROIvx = r_ROIvx
+  )
+
+# ---------- Build polygon points (clockwise: Ypos → ROIvox → Ecc → Yneg → Size → FWHM → Ypos) ----------
+axes_order <- c("Ypos","ROIvox","Ecc","Yneg","Size","FWHM")
+
+build_one_poly <- function(row) {
+  vals <- c(
+    Ypos = row$r_Ypos, ROIvox = row$r_ROIvx, Ecc = row$r_Ecc,
+    Yneg = row$r_Yneg, Size   = row$r_Size,  FWHM = row$r_FWHM
+  )
+  df <- tibble(axis = axes_order, r = as.numeric(vals[axes_order])) %>%
+    left_join(spokes, by = "axis") %>%
+    mutate(x = r * cx, y = r * sy)
+  bind_rows(df, df[1, , drop = FALSE]) %>%  # close polygon
+    mutate(ROI = row$ROI, hemi = row$hemi, group = row$group, line_col = row$line_col)
+}
+
+poly_pts <- norm_df %>%
+  arrange(ROI, hemi, group) %>%
+  split(list(norm_df$ROI, norm_df$hemi, norm_df$group), drop = TRUE) %>%
+  purrr::map_dfr(~ build_one_poly(.x[1, ]))
+
+# Endpoints (drop the closing duplicate row)
+end_pts <- poly_pts %>%
+  group_by(ROI, hemi, group) %>%
+  mutate(idx = row_number()) %>%
+  filter(idx < max(idx)) %>%
+  select(-idx) %>%
+  ungroup()
+
+# ---------- rings, rays, labels ----------
+axes_df <- tidyr::expand_grid(
+  ROI  = factor(roi_levels, levels = roi_levels, ordered = TRUE),
+  hemi = factor(c("lh","rh"), levels = c("lh","rh"))
+)
+
+rings <- tibble(r = c(0.25, 0.5, 0.75, 1.0)) %>%
+  tidyr::crossing(theta = seq(0, 2*pi, length.out = 361)) %>%
+  mutate(x = r * cos(theta), y = r * sin(theta)) %>%
+  tidyr::crossing(axes_df)
+
+rays <- spokes %>%
+  mutate(x0 = 0, y0 = 0, x1 = cx, y1 = sy) %>%
+  tidyr::crossing(axes_df)
+
+end_labels <- bind_rows(
+  tibble(axis="Ypos",   lab=sprintf("%d",  y_lim),         x=cos(deg2rad( 90)),  y=sin(deg2rad( 90))),
+  tibble(axis="Yneg",   lab=sprintf("%d", -y_lim),         x=cos(deg2rad(-90)),  y=sin(deg2rad(-90))),
+  tibble(axis="Ecc",    lab=sprintf("%d",  ecc_lim),       x=cos(deg2rad(-45)),  y=sin(deg2rad(-45))),
+  tibble(axis="ROIvox", lab=vox_rel_label_max,             x=cos(deg2rad( 45)),  y=sin(deg2rad( 45))),
+  tibble(axis="FWHM",   lab=sprintf("%d",  fwhm_lim),      x=cos(deg2rad(135)),  y=sin(deg2rad(135))),
+  tibble(axis="Size",   lab=sprintf("%d",  size_lim),      x=cos(deg2rad(-135)), y=sin(deg2rad(-135)))
+) %>% tidyr::crossing(axes_df)
+
+lab_hjust <- function(x) ifelse(x < -1e-6, 1.05, ifelse(x > 1e-6, -0.05, 0.5))
+lab_vjust <- function(y) ifelse(y >  1e-6, -0.35, ifelse(y < -1e-6, 1.35, 0.5))
+
+# ---------- draw ----------
+n_cols <- length(roi_levels); n_rows <- 2
+panel_w_in <- 1.9; panel_h_in <- 1.9
+w_in <- n_cols*panel_w_in + 1.2; h_in <- n_rows*panel_h_in + 1.2
+
+out_file <- file.path(out_dir, "F6_fingerprint_polar_clockwise_ROIvxRel.png")
+if (requireNamespace("ragg", quietly=TRUE)) {
+  ragg::agg_png(out_file, width=w_in, height=h_in, units="in", res=300)
+} else {
+  png(out_file, width=w_in, height=h_in, units="in", res=300)
+}
+
+ggplot() +
+  # rings & rays
+  geom_path(data = rings, aes(x = x, y = y, group = interaction(r, ROI, hemi)),
+            color = "gray75", linewidth = 0.4) +
+  geom_segment(data = rays, aes(x = x0, y = y0, xend = x1, yend = y1),
+               color = "gray75", linewidth = 0.6) +
+  # axis-end labels
+  geom_text(data = end_labels, aes(x = x, y = y, label = lab),
+            size = 6, color = "gray35",
+            vjust = lab_vjust(end_labels$y),
+            hjust = lab_hjust(end_labels$x)) +
+
+  # Adolescents = polygon filled 
+  geom_polygon(
+    data = poly_pts %>% dplyr::filter(group == "adolescents"),
+    aes(x = x, y = y, group = interaction(ROI, hemi, group), fill = line_col),
+    color = NA, alpha = 0.70
+  ) +
+  scale_fill_identity() +
+
+  # Adults = solid line 
+  geom_path(
+    data = poly_pts %>% dplyr::filter(group == "Adults"),
+    aes(x = x, y = y, group = interaction(ROI, hemi, group), colour = line_col),
+    linewidth = 1.7, lineend = "round", linetype = "solid"
+  ) +
+
+  # endpoints (same colors; shows per-axis vertices)
+  geom_point(
+    data = end_pts,
+    aes(x = x, y = y, colour = line_col),
+    size = 2, stroke = 0.3
+  ) +
+  scale_colour_identity() +
+  coord_equal(xlim = c(-1.12, 1.12), ylim = c(-1.12, 1.12), expand = FALSE, clip = "off") +
+  labs(x = NULL, y = NULL) +
+  facet_grid(hemi ~ ROI, drop = TRUE) +
+  theme_minimal() +
+  theme(
+    legend.position  = "none",
+    strip.background = element_blank(),
+    strip.text       = element_blank(),
+    panel.grid       = element_blank(),
+    axis.text        = element_blank(),
+    axis.ticks       = element_blank(),
+    panel.spacing.x  = unit(1.4, "lines"),
+    panel.spacing.y  = unit(5, "lines"),
+    plot.margin      = margin(10, 24, 10, 24)
+  )
+
+dev.off()
+
+```
+

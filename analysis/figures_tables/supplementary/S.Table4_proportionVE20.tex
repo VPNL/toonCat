@@ -1,0 +1,35 @@
+\begin{table}
+\centering
+\begin{tabular}{llrrll}
+\toprule
+Analysis & model term & df1 & df2 & F.ratio & p.value\\
+\midrule
+LMM: Proportion Voxels with Variance Explained > 20\% & group & 1 & 55.19 & 3.076 & 0.08498666\\
+ & stream & 1 & 689.98 & 13.222 & 0.0002973375\\
+ & category & 2 & 683.89 & 31.444 & 8.625e-14\\
+ & hemi & 1 & 689.08 & 14.143 & 0.0001838211\\
+ & group:stream & 1 & 689.98 & 0.428 & 0.5133458\\
+\addlinespace
+ & group:category & 2 & 683.89 & 4.635 & 0.01001403\\
+ & group:hemi & 1 & 689.08 & 0.009 & 0.923237\\
+ & stream:category & 2 & 683.20 & 72.143 & 3.755e-29\\
+ & stream:hemi & 1 & 688.61 & 0.661 & 0.4164424\\
+ & category:hemi & 2 & 682.80 & 0.302 & 0.7392237\\
+\addlinespace
+ & group:stream:category & 2 & 683.20 & 2.491 & 0.08355253\\
+ & group:stream:hemi & 1 & 688.61 & 0.335 & 0.5632079\\
+ & group:category:hemi & 2 & 682.80 & 0.190 & 0.8269975\\
+ & stream:category:hemi & 2 & 681.59 & 4.829 & 0.008272539\\
+ & group:stream:category:hemi & 2 & 681.59 & 1.941 & 0.1443088\\
+\addlinespace
+Ventral LMM: Proportion Voxels with Variance Explained > 20\% & group & 1 & 46.94 & 2.751 & 0.1038762\\
+ & category & 3 & 355.73 & 36.727 & 1.063e-20\\
+ & hemi & 1 & 359.21 & 9.374 & 0.002366371\\
+ & group:category & 3 & 355.73 & 0.853 & 0.4655169\\
+ & group:hemi & 1 & 359.21 & 1.069 & 0.3019352\\
+\addlinespace
+ & category:hemi & 3 & 354.79 & 3.751 & 0.0112246\\
+ & group:category:hemi & 3 & 354.79 & 0.879 & 0.4523456\\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,18 @@
+\begin{table}
+\centering
+\begin{tabular}{llrrll}
+\toprule
+Analysis & model term & df1 & df2 & F.ratio & p.value\\
+\midrule
+LMM: ROI size \textasciitilde{} fwhm + size + ecc + group & fwhm & 1 & 241.05 & 52.209 & 6.535e-12\\
+ & size & 1 & 237.49 & 3.278 & 0.07145696\\
+ & ecc & 1 & 239.46 & 4.442 & 0.03611168\\
+ & group & 1 & 38.15 & 0.493 & 0.4870366\\
+LMM: meanT \textasciitilde{} fwhm + size + ecc + group & fwhm & 1 & 233.13 & 24.865 & 1.201e-06\\
+\addlinespace
+ & size & 1 & 235.91 & 0.083 & 0.7736299\\
+ & ecc & 1 & 225.58 & 0.948 & 0.3312479\\
+ & group & 1 & 37.14 & 0.038 & 0.8472222\\
+\bottomrule
+\end{tabular}
+\end{table}

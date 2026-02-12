@@ -1,0 +1,317 @@
+---
+title: "toonCat_fig4"
+author: "Jewelia K. Yao"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# SETUP
+```{r Setup}
+source("./code/toonCat_analysisSetup.R")
+output_directory <- "./results/figures/fig4"
+```
+
+```{r Plot Setup}
+roi_order_all <- c("pOTS_words","mOTS_words","OTS_bodies",
+                   "IOG_faces","pFus_faces","mFus_faces",
+                   "CoS_places","blank","LOS_limbs","ITG_limbs",
+                   "MTG_limbs","pSTS_faces","blank1","MOG_places","IPS_places")
+
+# ------- 1) Data prep: keep ROI order + add category, fill_key, point_col -------
+df.plot <- df.CoV_cat_latdors %>%
+  mutate(
+    ROI   = factor(stringr::str_trim(as.character(ROI)), levels = roi_order_all),
+    group = factor(group, levels = c("adolescents","Adults")),
+    hemi  = factor(hemi,  levels = c("lh","rh","zh")),
+    category = case_when(
+      grepl("_faces$",  ROI)                         ~ "faces",
+      grepl("_words$",  ROI)                         ~ "words",
+      grepl("_places$", ROI)                         ~ "places",
+      grepl("(_bodies$|_limbs$|^OTS_bodies$)", ROI)  ~ "bodies",
+      ROI %in% c("blank","blank1")                  ~ "blank",
+      TRUE                                           ~ "other"
+    ),
+    fill_key  = interaction(category, group, sep = "."),
+    # Adults color per category for points (used below)
+    point_col = case_when(
+      category == "faces"  ~ "#8B0000",
+      category == "bodies" ~ "#BA8E23",
+      category == "places" ~ "#013220",
+      category == "words"  ~ "#000066",
+      TRUE                 ~ "#7f7f7f"
+    )
+  )
+
+# ------- 2) Fill palette to match bar colors -------
+fill_pal <- c(
+  "faces.adolescents"   = "#FF0000",
+  "faces.Adults"        = "#8B0000",
+  "bodies.adolescents"  = "#E4CD04",
+  "bodies.Adults"       = "#BA8E23",
+  "places.adolescents"  = "#008000",
+  "places.Adults"       = "#013220",
+  "words.adolescents"   = "#0000FF",
+  "words.Adults"        = "#000066",
+  "blank.adolescents"   = "#FFFFFF",
+  "blank.Adults"        = "#FFFFFF"
+)
+
+library(dplyr)
+library(purrr)
+library(readr)
+
+perform_and_save_t_tests <- function(data, split_var, group_var, measure_var, output_file_base) {
+  # 1) Filter & split by hemisphere × ROI
+  data_filtered <- data %>%
+    filter(hemi %in% c("lh","rh"),
+           !(ROI %in% c("blank","blank1","blank2","blank3","blank4"))) %>%
+    na.omit()
+
+  split_data <- split(data_filtered, list(data_filtered$hemi, data_filtered$ROI))
+
+  # 2) Per-split Welch t-test (adolescents vs Adults)
+  perform_t_test <- function(df) {
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+    group_data <- df %>% filter(!!sym(group_var) == "adolescents") %>% pull(!!sym(measure_var))
+    adult_data <- df %>% filter(!!sym(group_var) == "Adults")       %>% pull(!!sym(measure_var))
+    if (length(group_data) > 0 & length(adult_data) > 0) {
+      tt <- t.test(group_data, adult_data, var.equal = FALSE)
+      tibble(
+        hemi             = unique(df$hemi),
+        ROI              = unique(df$ROI),
+        t_statistic      = unname(tt$statistic),
+        p_value          = unname(tt$p.value),
+        df               = unname(tt$parameter),
+        mean_adolescents = mean(group_data, na.rm = TRUE),
+        mean_Adults      = mean(adult_data,  na.rm = TRUE)
+      )
+    } else NULL
+  }
+
+  res <- map_dfr(split_data, perform_t_test)
+
+  # 3) Save (full + significant after BH-FDR)
+  if (!missing(output_file_base) && !is.null(output_file_base)) {
+    write_csv(res, paste0(output_file_base, "_all.csv"))
+    res_sig <- res %>% mutate(p_adj = p.adjust(p_value, method = "BH")) %>% filter(p_adj < 0.05)
+    write_csv(res_sig, paste0(output_file_base, "_sig.csv"))
+  }
+  res
+}
+
+
+# Run tests for FWHM using the same logic
+tt_fwhm <- perform_and_save_t_tests(
+  data            = df.plot,
+  split_var       = c("hemi","ROI"),   # not used internally, kept for API parity
+  group_var       = "group",
+  measure_var     = "fwhm",
+  output_file_base = file.path(output_directory, "t_FWHM")
+)
+
+# Build star labels from these exact tests (BH-FDR within all ROI×hemi)
+p_to_stars <- function(p) dplyr::case_when(
+  is.na(p)   ~ "",
+  p < 0.001  ~ "***",
+  p < 0.01   ~ "**",
+  p < 0.05   ~ "*",
+  TRUE       ~ ""
+)
+
+sig_tbl_fwhm <- tt_fwhm %>%
+  mutate(
+    p_adj = p.adjust(p_value, method = "BH"),
+    stars = p_to_stars(p_value),
+    lab   = ifelse(stars == "", "", paste0(stars)),
+    x     = paste0("Adults.", hemi),          # exact discrete x labels in your violins
+    y     = 39                                # sits under the 0–40 top limit
+  ) %>%
+  filter(lab != "")
+
+
+```
+
+```{r}
+png(file.path(output_directory, "F4_totalFWHM_violin_rh.png"), units = "in", width = 15, height = 3, res = 300)
+
+df.plot <- df.CoV_cat_latdors %>%
+  filter(ROI != "mOTS_words") %>%
+  mutate(
+    ROI   = factor(stringr::str_trim(as.character(ROI)), levels = roi_order_rh),
+    group = factor(group, levels = c("adolescents","Adults")),
+    hemi  = factor(hemi,  levels = c("lh","rh","zh")),
+    category = case_when(
+      grepl("_faces$",  ROI)                         ~ "faces",
+      grepl("_words$",  ROI)                         ~ "words",
+      grepl("_places$", ROI)                         ~ "places",
+      grepl("(_bodies$|_limbs$|^OTS_bodies$)", ROI)  ~ "bodies",
+      ROI %in% c("blank","blank1")                  ~ "blank",
+      TRUE                                           ~ "other"
+    ),
+    fill_key  = interaction(category, group, sep = "."),
+    # Adults color per category for points (used below)
+    point_col = case_when(
+      category == "faces"  ~ "#8B0000",
+      category == "bodies" ~ "#BA8E23",
+      category == "places" ~ "#013220",
+      category == "words"  ~ "#000066",
+      TRUE                 ~ "#7f7f7f"
+    )
+  )
+
+# ------- 2) Fill palette to match bar colors -------
+fill_pal <- c(
+  "faces.adolescents"   = "#FF0000",
+  "faces.Adults"        = "#8B0000",
+  "bodies.adolescents"  = "#E4CD04",
+  "bodies.Adults"       = "#BA8E23",
+  "places.adolescents"  = "#008000",
+  "places.Adults"       = "#013220",
+  "words.adolescents"   = "#0000FF",
+  "words.Adults"        = "#000066",
+  "blank.adolescents"   = "#FFFFFF",
+  "blank.Adults"        = "#FFFFFF"
+)
+
+perform_and_save_t_tests <- function(data, split_var, group_var, measure_var, output_file_base) {
+  # 1) Filter & split by hemisphere × ROI
+  data_filtered <- data %>%
+    filter(hemi %in% c("lh","rh"),
+           !(ROI %in% c("blank","blank1","blank2","blank3","blank4"))) %>%
+    na.omit()
+
+  split_data <- split(data_filtered, list(data_filtered$hemi, data_filtered$ROI))
+
+  # 2) Per-split Welch t-test (adolescents vs Adults)
+  perform_t_test <- function(df) {
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+    group_data <- df %>% filter(!!sym(group_var) == "adolescents") %>% pull(!!sym(measure_var))
+    adult_data <- df %>% filter(!!sym(group_var) == "Adults")       %>% pull(!!sym(measure_var))
+    if (length(group_data) > 0 & length(adult_data) > 0) {
+      tt <- t.test(group_data, adult_data, var.equal = FALSE)
+      tibble(
+        hemi             = unique(df$hemi),
+        ROI              = unique(df$ROI),
+        t_statistic      = unname(tt$statistic),
+        p_value          = unname(tt$p.value),
+        df               = unname(tt$parameter),
+        mean_adolescents = mean(group_data, na.rm = TRUE),
+        mean_Adults      = mean(adult_data,  na.rm = TRUE)
+      )
+    } else NULL
+  }
+
+  res <- map_dfr(split_data, perform_t_test)
+
+  # 3) Save (full + significant after BH-FDR)
+  if (!missing(output_file_base) && !is.null(output_file_base)) {
+    write_csv(res, paste0(output_file_base, "_all.csv"))
+    res_sig <- res %>% mutate(p_adj = p.adjust(p_value, method = "BH")) %>% filter(p_adj < 0.05)
+    write_csv(res_sig, paste0(output_file_base, "_sig.csv"))
+  }
+  res
+}
+
+# Run tests for FWHM using the same logic
+tt_fwhm <- perform_and_save_t_tests(
+  data            = df.plot,
+  split_var       = c("hemi","ROI"),   # not used internally, kept for API parity
+  group_var       = "group",
+  measure_var     = "fwhm",
+  output_file_base = file.path(output_directory, "t_FWHM")
+)
+
+# Build star labels from these exact tests (BH-FDR within all ROI×hemi)
+p_to_stars <- function(p) dplyr::case_when(
+  is.na(p)   ~ "",
+  p < 0.001  ~ "***",
+  p < 0.01   ~ "**",
+  p < 0.05   ~ "*",
+  TRUE       ~ ""
+)
+
+sig_tbl_fwhm <- tt_fwhm %>%
+  mutate(
+    p_adj = p.adjust(p_value, method = "BH"),
+    stars = p_to_stars(p_value),
+    lab   = ifelse(stars == "", "", paste0(stars)),
+    x     = paste0("Adults.", hemi),          # exact discrete x labels in your violins
+    y     = 39                                # sits under the 0–40 top limit
+  ) %>%
+  filter(lab != "")
+
+# ------- 3) Figure code -------
+roi_order_rh <- c("pOTS_words","OTS_bodies",
+                  "IOG_faces","pFus_faces","mFus_faces",
+                  "CoS_places","blank","LOS_limbs","ITG_limbs",
+                  "MTG_limbs","pSTS_faces","blank1","MOG_places","IPS_places")
+
+p <- df.plot %>%
+  filter(hemi %in% c("rh","zh"),
+         ROI != "mOTS_words") %>%
+  filter(!(hemi == "zh" & ROI %in% c("blank","blank1"))) %>%
+  ggplot(.,
+  aes(x = interaction(group, hemi, sep = "."),
+      y = fwhm,
+      fill = fill_key,
+      alpha = stream)
+) +
+  geom_violin(position = position_dodge(width = 0.8),
+              na.rm = TRUE, colour = NA) +          # no outline, fill-only
+  # --- Points: always Adults color for that ROI's category ---
+  geom_point(
+    aes(colour = point_col),
+    position = position_dodge(width = 0.8),
+    size = 1, alpha = 1, show.legend = FALSE
+  ) +
+  stat_summary(fun = mean, geom = "point", color = "black", size = 1.5,
+               position = position_dodge(width = 0.8)) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", color = "black", width = 1,
+               position = position_dodge(width = 0.8)) +
+  labs(y = "Total FWHM (°)") +
+  facet_grid(~ ROI, drop = FALSE) +
+  geom_hline(yintercept = 0)+
+  theme(
+    legend.position = "none",
+    strip.background = element_blank(),
+    strip.text.x = element_blank(),
+    axis.title.y = element_text(size = 16),
+    panel.spacing = unit(6, "mm"),
+    panel.grid.major.y = element_line(color = "gray96", size = 0.5),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.text.y = element_text(size = 15),
+    text = element_text(family = "Avenir"),
+    plot.margin = margin(5.5, 0, 5.5, 5.5),
+    axis.line.x  = element_line(color = "white", linewidth = 0.6),
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background  = element_rect(fill = "white", color = NA)
+  ) +
+  geom_hline(yintercept = 0) +
+  scale_alpha_manual(values = c("lateraldorsal" = 0.5, "ventral" = .75)) +
+  scale_fill_manual(values = fill_pal, limits = names(fill_pal), drop = FALSE, na.translate = FALSE) +
+  scale_colour_identity() +                          # <- use hex colors as-is
+  scale_y_continuous(breaks = seq(0, 40, 10), limits = c(0, 40))
+
+# Optional: narrow 'blank' panels
+rel_widths <- ifelse(levels(df.plot$ROI) %in% c("blank","blank1"), 0.45, 1)
+# print(p + ggh4x::force_panelsizes(cols = unit(rel_widths, "null")))
+
+p_rh <- p + 
+  geom_text(
+    data = sig_tbl_fwhm %>% filter(hemi == "rh") %>%
+             mutate(ROI = factor(ROI, levels = levels(df.plot$ROI))),
+    aes(x = x, y = y, label = lab),
+    inherit.aes = FALSE,
+    family = "Avenir", fontface = "bold", size = 8
+  )
+
+print(p_rh + ggh4x::force_panelsizes(cols = unit(rel_widths, "null")))
+
+
+dev.off()
+
+
+
+```

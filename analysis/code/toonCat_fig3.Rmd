@@ -1,0 +1,555 @@
+---
+title: "toonCat_F3"
+author: "Jewelia K. Yao"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+# SETUP
+```{r Setup}
+source("./code/toonCat_analysisSetup.R")
+output_directory <- "./results/figures/fig3"
+```
+
+```{r Plot Setup}
+# Colors
+new_colors_face <- c("#FF0000","#8B0000")
+new_colors_body <- c("#E4CD04","#BA8E23")
+new_colors_place <- c("#008000","#013220")
+
+
+# Fill
+new_fill_face <- c("#FF0000","#FF0000","#FF0000","#FF0000")
+new_fill_body <- c("#E4CD04","#E4CD04","#E4CD04","#E4CD04")
+new_fill_place <- c("#008000","#008000","#008000")
+
+
+# Bars
+dodge <- position_dodge2(width = 1, preserve = "single", padding = 0)
+```
+
+```{r}
+perform_and_save_t_tests <- function(data, split_var, group_var, measure_var, output_file_base) {
+  # 1) Filter & split by hemisphere × ROI
+  data_filtered <- data %>%
+    filter(hemi %in% c("lh","rh"),
+           !(ROI %in% c("blank","blank1","blank2","blank3","blank4"))) %>%
+    na.omit()
+
+  split_data <- split(data_filtered, list(data_filtered$hemi, data_filtered$ROI))
+
+  # 2) Per-split Welch t-test (adolescents vs Adults)
+  perform_t_test <- function(df) {
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+    group_data <- df %>% filter(!!sym(group_var) == "adolescents") %>% pull(!!sym(measure_var))
+    adult_data <- df %>% filter(!!sym(group_var) == "Adults")       %>% pull(!!sym(measure_var))
+    if (length(group_data) > 0 & length(adult_data) > 0) {
+      tt <- t.test(group_data, adult_data, var.equal = FALSE)
+      tibble(
+        hemi             = unique(df$hemi),
+        ROI              = unique(df$ROI),
+        t_statistic      = unname(tt$statistic),
+        p_value          = unname(tt$p.value),
+        df               = unname(tt$parameter),
+        mean_adolescents = mean(group_data, na.rm = TRUE),
+        mean_Adults      = mean(adult_data,  na.rm = TRUE)
+      )
+    } else NULL
+  }
+
+  res <- map_dfr(split_data, perform_t_test)
+
+  # 3) Save (full + significant after BH-FDR)
+  if (!missing(output_file_base) && !is.null(output_file_base)) {
+    write_csv(res, paste0(output_file_base, "_all.csv"))
+    res_sig <- res %>% mutate(p_adj = p.adjust(p_value, method = "BH")) %>% filter(p_adj < 0.05)
+    write_csv(res_sig, paste0(output_file_base, "_sig.csv"))
+  }
+  res
+}
+
+p_to_stars <- function(p) dplyr::case_when(
+  is.na(p)   ~ "",
+  p < 0.001  ~ "***",
+  p < 0.01   ~ "**",
+  p < 0.05   ~ "*",
+  TRUE       ~ ""
+)
+# Build a star table from your t-test output (hemi×ROI)
+build_star_tbl <- function(tt_res, y_top){
+  tt_res %>%
+    dplyr::mutate(
+      stars = p_to_stars(p_value),      # <-- unadjusted p
+      lab   = stars,                    # stars only (no arrows)
+      x     = paste0("Adults.", hemi),  # exact discrete x used in plots
+      y     = y_top
+    ) %>%
+    dplyr::filter(lab != "")
+}
+
+tt_centerY <- perform_and_save_t_tests(
+  data = df.centers_cat, split_var = c("hemi","ROI"),
+  group_var = "group", measure_var = "centerY",
+  output_file_base = file.path(output_directory, "t_centerY")  # or NULL to skip saving
+)
+stars_centerY <- build_star_tbl(tt_centerY, y_top = 8.2)
+
+tt_centerR <- perform_and_save_t_tests(
+  data = df.centers_cat, split_var = c("hemi","ROI"),
+  group_var = "group", measure_var = "centerR",
+  output_file_base = file.path(output_directory, "t_centerR")
+)
+stars_centerR <- build_star_tbl(tt_centerR, y_top = 16.8)
+
+tt_size <- perform_and_save_t_tests(
+  data = df.centers_cat, split_var = c("hemi","ROI"),
+  group_var = "group", measure_var = "size",
+  output_file_base = file.path(output_directory, "t_size")
+)
+stars_size <- build_star_tbl(tt_size, y_top = 24.2)
+
+```
+
+# Y-POSITION
+```{r Y-faces, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "F3A_pRFcenters_yPosition_bar_face.png"), units="in", width=4, height=3, res=300)
+
+Y_face <- df.centers_cat %>%
+  filter(category == 'face') %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = centerY, 
+                fill = group, 
+                alpha = stream)) +
+    geom_bar(aes(alpha = stream),
+           stat = "summary", fun = "mean",
+           width = 0.8, position = dodge, size = 1.25) +
+  geom_point(size = 1, na.rm = TRUE, color = "#8B0000") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Y Position  (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir"),
+        axis.line.x = element_line(color = "white")) +
+  scale_color_manual(values = new_colors_face, na.translate = FALSE) +
+  scale_alpha_manual(values = c("lateral" = 0.5, "ventral" = .85)) +
+  scale_fill_manual(values = new_colors_face, na.translate = FALSE) +
+  theme(axis.line=element_blank(),axis.text.x=element_blank(),
+          axis.text.y=element_blank(),axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),legend.position="none") +
+  scale_y_continuous(breaks = seq(-8, 8, 4), limits = c(-9, 9)) 
+
+Y_face
+```
+
+```{r Y-body, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "F3A_pRFcenters_yPosition_bar_body.png"), units="in", width=4, height=3, res=300)
+
+Y_body <- df.centers_cat %>%
+  filter(category == 'body') %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = centerY, 
+                fill = group, 
+                alpha = stream)) +
+    geom_bar(aes(alpha = stream),
+           stat = "summary", fun = "mean",
+           width = 0.8, position = dodge, size = 1.25) +
+  geom_point(size = 1, na.rm = TRUE, color="#BA8E23") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Y Position  (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir"),
+        axis.line.x = element_line(color = "white")) +
+  scale_color_manual(values = new_colors_body, na.translate = FALSE) +
+  scale_alpha_manual(values = c("lateral" = 0.5, "ventral" = .85)) +
+  scale_fill_manual(values = new_colors_body, na.translate = FALSE) +
+  scale_y_continuous(breaks = seq(-8, 8, 4), limits = c(-9, 9)) 
+Y_body
+```
+
+```{r Y-place, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "F3A_pRFcenters_yPosition_bar_place.png"), units="in", width=4, height=3, res=300)
+
+Y_place <- df.centers_cat %>%
+  filter(category == 'place') %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = centerY,
+                fill = group, 
+                alpha = stream)) +
+  geom_bar(stat = "summary", fun = "mean", width=.8, position = position_dodge2(width = 1, preserve = "single", padding = 0), size = 1.25) +
+  geom_point(size = 1, na.rm = TRUE, color ="#013220") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Y Position  (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir"),
+        axis.line.x = element_line(color = "white")) +
+  scale_color_manual(values = new_colors_place, na.translate = FALSE) +
+  scale_alpha_manual(values = c("dorsal" = 0.5, "ventral" = .85)) +
+  scale_fill_manual(values = new_colors_place, na.translate = FALSE) +
+  scale_y_continuous(breaks = seq(-8, 8, 4), limits = c(-9, 9)) +
+  theme(axis.line=element_blank(),axis.text.x=element_blank(),
+          axis.text.y=element_blank(),axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),legend.position="none") +
+            scale_x_discrete(expand = c(0, 1.25))
+Y_place
+```
+
+```{r}
+png(file.path(output_directory, "F3A_pRFcenters_yposition_bar_ALL.png"), units="in", width=12, height=3.5, res=300)
+
+# faces
+Y_face <- Y_face + geom_text(
+  data = stars_centerY %>% dplyr::mutate(
+           ROI  = factor(ROI, levels = roi_order_byFace),
+           hemi = factor(hemi, levels = c("lh","rh"))),
+  aes(x = x, y = y, label = lab),
+  inherit.aes = FALSE, family = "Avenir", fontface = "bold", size = 6
+)
+
+# bodies
+Y_body <- Y_body + geom_text(
+  data = stars_centerY %>% dplyr::mutate(
+           ROI  = factor(ROI, levels = roi_order_byBodies),
+           hemi = factor(hemi, levels = c("lh","rh"))),
+  aes(x = x, y = y, label = lab),
+  inherit.aes = FALSE, family = "Avenir", fontface = "bold", size = 6
+)
+
+# places
+Y_place <- Y_place + geom_text(
+  data = stars_centerY %>% dplyr::mutate(
+           ROI  = factor(ROI, levels = roi_order_byPlace),
+           hemi = factor(hemi, levels = c("lh","rh"))),
+  aes(x = x, y = y, label = lab),
+  inherit.aes = FALSE, family = "Avenir", fontface = "bold", size = 6
+)
+
+
+Y_body + Y_face + Y_place
+```
+
+# Eccentricity
+```{r Ecc-face, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "F3B_pRFcenters_eccentricity_bar_face.png"), units="in", width=4, height=3, res=300)
+
+ecc_face <- df.centers_cat %>%
+  filter(category == 'face') %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = centerR, 
+                fill = group, 
+                alpha = stream)) +
+    geom_bar(aes(alpha = stream),
+           stat = "summary", fun = "mean",
+           width = 0.8, position = dodge, size = 1.25) +
+  geom_point(size = 1, na.rm = TRUE, color="#8B0000") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Eccentricity  (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir"),
+        axis.line.x = element_line(color = "white")) +
+  scale_color_manual(values = new_colors_face, na.translate = FALSE) +
+  scale_alpha_manual(values = c("lateral" = 0.5, "ventral" = .85)) +
+  scale_fill_manual(values = new_colors_face, na.translate = FALSE) +
+  theme(axis.line=element_blank(),axis.text.x=element_blank(),
+          axis.text.y=element_blank(),axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),legend.position="none") +
+  scale_y_continuous(breaks = seq(0, 17, 5), limits = c(0, 17.5))
+
+ecc_face
+```
+
+```{r Ecc-body, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "F3B_pRFcenters_eccentricity_bar_body.png"), units="in", width=4, height=3, res=300)
+
+ecc_body <- df.centers_cat %>%
+  filter(category == 'body') %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = centerR, 
+                fill = group,
+                alpha = stream)) +
+    geom_bar(aes(alpha = stream),
+           stat = "summary", fun = "mean",
+           width = 0.8, position = dodge, size = 1.25) +
+  geom_point(size = 1, na.rm = TRUE,color="#BA8E23") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Eccentricity  (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir"),
+        axis.line.x = element_line(color = "white")) +
+  scale_color_manual(values = new_colors_body, na.translate = FALSE) +
+  scale_alpha_manual(values = c("lateral" = 0.5, "ventral" = .85)) +
+  scale_fill_manual(values = new_colors_body, na.translate = FALSE) +
+  scale_y_continuous(breaks = seq(0, 17, 5), limits = c(0, 17.5))
+ecc_body
+```
+
+```{r Ecc-place, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "F3B_pRFcenters_eccentricity_bar_place.png"), units="in", width=4, height=3, res=300)
+
+ecc_place <- df.centers_cat %>%
+  filter(category == 'place') %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = centerR, 
+                fill = group, 
+                alpha = stream)) +
+  geom_bar(stat = "summary", fun = "mean", width=.8, position = position_dodge2(width = 1, preserve = "single", padding = 0), size = 1.25) +
+  geom_point(size = 1, na.rm = TRUE, color = "#013220") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Eccentricity  (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir"),
+        axis.line.x = element_line(color = "white")) +
+  scale_color_manual(values = new_colors_place, na.translate = FALSE) +
+  scale_alpha_manual(values = c("dorsal" = 0.5, "ventral" = .85)) +
+  scale_fill_manual(values = new_colors_place, na.translate = FALSE) +
+  scale_y_continuous(breaks = seq(0, 17, 5), limits = c(0, 17.5))+
+  theme(axis.line=element_blank(),axis.text.x=element_blank(),
+          axis.text.y=element_blank(),axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),legend.position="none") +
+            scale_x_discrete(expand = c(0, 1.25))
+
+ecc_place
+```
+
+```{r}
+png(file.path(output_directory, "F3B_pRFcenters_ecc_bar_ALL.png"), units="in", width=12, height=3.5, res=300)
+
+ecc_face <- ecc_face + geom_text(
+  data = stars_centerR %>% dplyr::mutate(
+           ROI  = factor(ROI, levels = roi_order_byFace),
+           hemi = factor(hemi, levels = c("lh","rh"))),
+  aes(x = x, y = y, label = lab),
+  inherit.aes = FALSE, family = "Avenir", fontface = "bold", size = 6
+)
+
+ecc_body <- ecc_body + geom_text(
+  data = stars_centerR %>% dplyr::mutate(
+           ROI  = factor(ROI, levels = roi_order_byBodies),
+           hemi = factor(hemi, levels = c("lh","rh"))),
+  aes(x = x, y = y, label = lab),
+  inherit.aes = FALSE, family = "Avenir", fontface = "bold", size = 6
+)
+
+ecc_place <- ecc_place + geom_text(
+  data = stars_centerR %>% dplyr::mutate(
+           ROI  = factor(ROI, levels = roi_order_byPlace),
+           hemi = factor(hemi, levels = c("lh","rh"))),
+  aes(x = x, y = y, label = lab),
+  inherit.aes = FALSE, family = "Avenir", fontface = "bold", size = 6
+)
+
+ecc_body + ecc_face + ecc_place
+```
+
+# SIZE
+```{r Size-face, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "F3C_pRFcenters_size_bar_face.png"), units="in", width=4, height=3, res=300)
+
+size_face <- df.centers_cat %>%
+  filter(category == 'face') %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = size, 
+                fill = group, 
+                alpha = stream)) +
+    geom_bar(aes(alpha = stream),
+           stat = "summary", fun = "mean",
+           width = 0.8, position = dodge, size = 1.25) +  geom_point(size = 1, na.rm = TRUE, alpha = 0.8, color = "#8B0000") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Size  (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir"),
+        axis.line.x = element_line(color = "white")) +
+  scale_color_manual(values = new_colors_face, na.translate = FALSE) +
+  scale_alpha_manual(values = c("lateral" = 0.5, "ventral" = .85)) +
+  scale_fill_manual(values = new_colors_face, na.translate = FALSE) +
+   scale_y_continuous(breaks = seq(0, 25, 10), limits = c(0, 25)) +
+  theme(axis.line=element_blank(),axis.text.x=element_blank(),
+          axis.text.y=element_blank(),axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),legend.position="none")
+
+size_face
+```
+
+```{r Size-body, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "F3C_pRFcenters_size_bar_body.png"), units="in", width=5, height=3, res=300)
+
+size_body <- df.centers_cat %>%
+  filter(category == 'body') %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = size, 
+                fill = group, 
+                alpha = stream)) +
+    geom_bar(aes(alpha = stream),
+           stat = "summary", fun = "mean",
+           width = 0.8, position = dodge, size = 1.25) +
+  geom_point(size = 1, na.rm = TRUE, alpha = 0.9,color = "#BA8E23") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Size  (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir"),
+        axis.line.x = element_line(color = "white")) +
+  scale_color_manual(values = new_colors_body, na.translate = FALSE) +
+  scale_alpha_manual(values = c("lateral" = 0.5, "ventral" = .85)) +
+  scale_fill_manual(values = new_colors_body, na.translate = FALSE) +
+  scale_y_continuous(breaks = seq(0, 25, 10), limits = c(0, 25))
+
+size_body
+```
+
+```{r Size-place, fig.width=12, fig.height=4, warning=F, message=F, echo=FALSE}
+png(file.path(output_directory, "F3C_pRFcenters_size_bar_place.png"), units="in", width=3.5, height=3, res=300)
+
+size_place <- df.centers_cat %>%
+  filter(category == 'place') %>%
+  ggplot(., aes(x = interaction(group, hemi, sep = "."), 
+                y = size, 
+                fill = group, 
+                alpha = stream)) +
+  geom_bar(stat = "summary", fun = "mean", width=.8, position = position_dodge2(width = 1, preserve = "single", padding = 0), size = 1.25) +
+  geom_point(size = 1, na.rm = TRUE, alpha = 0.8, color = "#013220") +
+  geom_hline(yintercept = 0) +
+  labs(y = "Size  (°)") +
+  facet_grid(~ ROI) +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        axis.title.y=element_text(size=16),
+        panel.spacing = unit(0, "null"),
+        panel.grid.major.y = element_line(color = "gray96",size = 0.5),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15),
+        text = element_text(family = "Avenir"),
+        axis.line.x = element_line(color = "white")) +
+  scale_color_manual(values = new_colors_place, na.translate = FALSE) +
+  scale_alpha_manual(values = c("dorsal" = 0.5, "ventral" = .85)) +
+  scale_fill_manual(values = new_colors_place, na.translate = FALSE) +
+  scale_y_continuous(breaks = seq(0, 25, 10), limits = c(0, 25)) +
+  theme(axis.line=element_blank(),axis.text.x=element_blank(),
+          axis.text.y=element_blank(),axis.ticks=element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_blank(),legend.position="none") +
+            scale_x_discrete(expand = c(0, 1.25))
+size_place
+```
+
+```{r}
+png(file.path(output_directory, "F3C_pRFcenters_size_bar_ALL.png"), units="in", width=12, height=3.5, res=300)
+
+size_face <- size_face + geom_text(
+  data = stars_size %>% dplyr::mutate(
+           ROI  = factor(ROI, levels = roi_order_byFace),
+           hemi = factor(hemi, levels = c("lh","rh"))),
+  aes(x = x, y = y, label = lab),
+  inherit.aes = FALSE, family = "Avenir", fontface = "bold", size = 6
+)
+
+size_body <- size_body + geom_text(
+  data = stars_size %>% dplyr::mutate(
+           ROI  = factor(ROI, levels = roi_order_byBodies),
+           hemi = factor(hemi, levels = c("lh","rh"))),
+  aes(x = x, y = y, label = lab),
+  inherit.aes = FALSE, family = "Avenir", fontface = "bold", size = 6
+)
+
+size_place <- size_place + geom_text(
+  data = stars_size %>% dplyr::mutate(
+           ROI  = factor(ROI, levels = roi_order_byPlace),
+           hemi = factor(hemi, levels = c("lh","rh"))),
+  aes(x = x, y = y, label = lab),
+  inherit.aes = FALSE, family = "Avenir", fontface = "bold", size = 6
+)
+
+size_body + size_face + size_place
+```
+
+# All
+```{r}
+png(file.path(output_directory, "F3_pRFcenters_bar_ALL.png"), units="in", width=12, height=12, res=300)
+(Y_body + Y_face + Y_place)/ plot_spacer()/(ecc_body + ecc_face + ecc_place)/ plot_spacer()/ (size_body + size_face + size_place) + plot_layout(heights = c(1, 0.3, 1, 0.3, 1))
+```
+

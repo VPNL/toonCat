@@ -7,8 +7,8 @@ output: html_document
 
 # SETUP
 ```{r Setup}
-source("./code/toonCat_analysisSetup.R")
-output_directory <- "./results/figures/fig3"
+source("~/Documents/projects/toonCat/analysis/code/toonCat_analysisSetup.R")
+output_directory <- "~/Documents/projects/toonCat/analysis/results/figures/fig3"
 ```
 
 ```{r Plot Setup}

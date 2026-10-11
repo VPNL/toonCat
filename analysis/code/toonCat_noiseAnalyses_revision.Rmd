@@ -1,0 +1,734 @@
+---
+title: "toonCat_NatCommBio_noiseControl_revisions"
+output: html_document
+date: "2026-06-10"
+---
+
+# ToonCat - Noise Analysis
+This markdown file includes analyses on noise in the fMRI data for Yao et al. (2026) to address reviews.
+
+## In Scanner Task Performance Across Groups
+Comparing accuracy across groups for the color-changing task (toonotopy) and the oddball detection task (functional localizer)
+
+```{r setup, include=FALSE}
+source("~/Documents/projects/toonCat/analysis/code/toonCat_analysisSetup.R")
+output_directory <- "~/Documents/projects/toonCat/analysis/results/revision/"
+
+# Set global text family and size
+theme_set(theme_classic() + # Or your preferred theme
+          theme(text = element_text(family = "Avenir", size = 14)))
+```
+
+
+```{r setup, include=FALSE}
+behavior <- read.csv("~/Documents/projects/toonCat/analysis/data/toonCat_behav.csv")
+
+df.behav <- behavior %>%
+  mutate(group = ifelse(age > 18, 'adults', 'kids'))
+```
+
+### Toonotopy Scores: No significant difference between adolescents and adults performance on the color change task.
+```{r}
+toonScores <- df.behav %>%
+  group_by(group) %>%
+  summarize(
+    mean_score = mean(toonScore, na.rm = TRUE),
+    sd_score = sd(toonScore, na.rm = TRUE)
+  ) %>%
+  mutate(exp = "toonotopy", task = "color change")
+
+toonScores
+```
+
+```{r}
+toonScore_diff <- t.test(toonScore ~ group, df.behav)
+toonScore_diff
+```
+
+### Functioal Localizer Scores: No significant difference between adolescents and adults performance on the oddball task.
+
+```{r}
+catScores <- df.behav %>%
+  group_by(group) %>%
+  summarize(
+    mean_score = mean(kidLOC.score, na.rm = TRUE),
+    sd_score = sd(kidLOC.score, na.rm = TRUE)
+  ) %>%
+  mutate(exp = "localizer", task = "oddball")
+
+catScores
+```
+
+```{r}
+catScore_diff <- t.test(kidLOC.score ~ group, df.behav)
+catScore_diff
+```
+
+### Figure Scores
+```{r}
+#png(file.path(output_directory, "taskScores.png"), units="in", width=4, height=3, res=300)
+
+plot_scores <- df.behav %>%
+  pivot_longer(cols = c(toonScore, kidLOC.score), names_to = "exp", values_to = "score") %>%
+  mutate(exp = case_match(exp,
+                          "kidLOC.score" ~ "Localizer \n(Oddball)",
+                          "toonScore" ~ "Toonotopy \n (Color Change)"),
+         group = case_match(group,
+                             "kids" ~ "adolescents",
+                             "adults" ~ "Adults"),
+         group = factor(group, levels = c("adolescents", "Adults")),
+         exp = factor(exp, levels = c("Toonotopy \n (Color Change)", "Localizer \n(Oddball)"))) %>%
+  na.omit()
+
+scorePlot <- plot_scores %>%
+  ggplot(., aes(x = group, 
+                y = score, 
+                alpha = group)) +
+  geom_bar(aes(alpha = group),
+           stat = "summary", fun = "mean",
+           width = 0.9, position = "dodge", size = 0.5) +
+  geom_point(aes(alpha = group, fill = exp),size = 1, na.rm = TRUE) +
+  scale_alpha_manual(values = c("adolescents" = 0.45, "Adults" = 0.9)) +
+  facet_grid( ~ exp) +
+  theme(legend.position = "none",
+        aspect.ratio = 2,
+        axis.text.y = element_text(size = 16),
+        axis.text.x = element_text(size = 8.75)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(x = "Age Group", y = "Task Accuracy (%)")
+
+scorePlot
+
+```
+
+## Eyetracking: Fixation and Saccades
+To rule out that group differences in the fMRI data are driven by differential eye movements, we compared fixation stability and saccades between adolescents and adults using EyeLink eyetracking recorded during the toonotopy runs. Gaze samples were cleaned with the lab's functional blink-removal procedure (`FuncBlinksRemoved`), which nulls the partial-occlusion samples flanking each blink that EyeLink's own blink events miss; metrics are computed directly from these cleaned samples (x/y already in degrees of visual angle, ~250 Hz). Processed data were available for 9 adolescents and 9 adults. Metrics are pooled across each participant's runs; runs with no usable (non-empty) data are excluded.
+
+```{r eye-setup, include=FALSE}
+library(tidyverse)
+library(R.matlab)
+eye_dir <- "~/Documents/projects/toonCat/analysis/data/toon_eyetracking_FuncBlinkRemoved"
+V_THRESH  <- 30    # deg/s saccade velocity threshold
+MIN_DUR   <- 8     # ms minimum saccade duration
+QC_SPREAD <- 5     # deg; tracking-loss reference threshold (reported in df.run, not used to exclude)
+
+# Read one FuncBlinksRemoved .mat run -> tibble(t_ms, x_deg, y_deg).
+# These files store one sample-level matrix [time_ms, x, y, pupil]; x/y are already in
+# degrees of visual angle and blinks (plus their flanking artifacts) are set to NaN.
+read_run <- function(path) {
+  a <- readMat(path)[[1]]               # Nx4 numeric matrix; grab first (only) variable
+  tibble(t = a[, 1], x = a[, 2], y = a[, 3])
+}
+
+# Velocity-based saccade detector: returns the amplitude (deg) of every saccade in a run.
+# A saccade is a contiguous run of samples with eye velocity > V_THRESH lasting >= MIN_DUR ms;
+# segments containing a NaN (blink/tracking gap) are skipped so blinks are never bridged.
+saccade_amps <- function(t, x, y) {
+  n <- length(t); if (n < 5) return(numeric(0))
+  dt <- median(diff(t), na.rm = TRUE) / 1000            # sample spacing in seconds
+  grad <- function(v) {                                 # central-difference gradient
+    g <- numeric(length(v)); m <- length(v)
+    g[1] <- v[2] - v[1]; g[m] <- v[m] - v[m - 1]
+    if (m > 2) g[2:(m - 1)] <- (v[3:m] - v[1:(m - 2)]) / 2
+    g
+  }
+  v <- sqrt((grad(x) / dt)^2 + (grad(y) / dt)^2)
+  above <- !is.na(v) & v > V_THRESH
+  min_samps <- max(1, round(MIN_DUR / 1000 / dt))
+  r <- rle(above); ends <- cumsum(r$lengths); starts <- ends - r$lengths + 1
+  amps <- numeric(0)
+  for (i in which(r$values)) {
+    s <- starts[i]; e <- ends[i]
+    if (e - s + 1 < min_samps) next
+    if (anyNA(x[s:e]) || anyNA(y[s:e])) next
+    amps <- c(amps, sqrt((x[e] - x[s])^2 + (y[e] - y[s])^2))
+  }
+  amps
+}
+
+# All runs, tagged with group (folder) and subject; one .mat per run
+runs <- tibble(path = list.files(eye_dir, pattern = "\\.mat$", recursive = TRUE, full.names = TRUE)) %>%
+  mutate(group   = str_match(path, "/(teens|adults)/")[, 2],
+         subject = str_match(path, "/(?:teens|adults)/([^/]+)/")[, 2],
+         run     = as.integer(str_extract(basename(path), "^[0-9]+")),   # leading digit of filename
+         dat     = map(path, read_run),
+         rec_min = map_dbl(dat, ~ (max(.x$t, na.rm = TRUE) - min(.x$t, na.rm = TRUE)) / 60000),
+         spread  = map_dbl(dat, ~ { g <- !is.na(.x$x)
+                                    if (sum(g) > 10) sqrt(var(.x$x[g]) + var(.x$y[g])) else NA_real_ }),
+         amps    = pmap(list(dat), ~ saccade_amps(..1$t, ..1$x, ..1$y)),
+         qc_ok   = is.finite(spread)) %>%   # keep any run with usable (non-empty) data
+  filter(subject != "INW06")               # exclude INW06 (tracking loss) from all eyetracking
+
+# Pooled valid samples (QC-passed runs) — used for fixation spread and the distribution plot.
+# x/y are already in degrees of visual angle.
+fix_all <- runs %>% filter(qc_ok) %>% transmute(group, subject, dat) %>%
+  unnest(dat) %>% filter(!is.na(x), !is.na(y))
+
+# Per-subject metrics, pooled across QC-passed runs. Saccades reported at the >= 2 deg
+# amplitude threshold (n_sacc, matching the 2 deg fixation circle); >= 1 and >= 3 deg kept for reference.
+df.eye <- runs %>% filter(qc_ok) %>%
+  group_by(group, subject) %>%
+  summarize(rec_min     = sum(rec_min),
+            n_sacc      = sum(map_int(amps, ~ sum(.x >= 2))),   # primary: >= 2 deg
+            n_sacc_1deg = sum(map_int(amps, ~ sum(.x >= 1))),
+            n_sacc_3deg = sum(map_int(amps, ~ sum(.x >= 3))),
+            .groups = "drop") %>%
+  left_join(fix_all %>% group_by(group, subject) %>%
+              summarize(fix_spread_deg = sqrt(var(x) + var(y)), .groups = "drop"),
+            by = c("group", "subject")) %>%
+  mutate(sacc_rate = n_sacc / rec_min,                          # >= 2 deg saccades per minute
+         sacc_rate_1deg = n_sacc_1deg / rec_min,
+         sacc_rate_3deg = n_sacc_3deg / rec_min,
+         group = case_match(group,
+                             "teens" ~ "adolescents",
+                             "adults" ~ "Adults"),
+         group = factor(group, levels = c("adolescents", "Adults")))
+
+# Per-run breakdown (every run, including those that fail QC) — saccade counts at each
+# amplitude threshold, recording length, fixation spread, and the QC flag.
+df.run <- runs %>%
+  transmute(group, subject, run, rec_min,
+            fix_spread_deg = spread, qc_ok,
+            n_sacc_1deg = map_int(amps, ~ sum(.x >= 1)),
+            n_sacc_2deg = map_int(amps, ~ sum(.x >= 2)),
+            n_sacc_3deg = map_int(amps, ~ sum(.x >= 3)),
+            sacc_rate_1deg = n_sacc_1deg / rec_min) %>%
+  arrange(group, subject, run)
+```
+
+### Fixation Stability: No significant difference between adolescents and adults.
+Fixation spread = SD of fixation position (in degrees of visual angle); smaller = more stable fixation.
+
+```{r}
+df.eye %>%
+  group_by(group) %>%
+  summarize(mean_spread_deg = mean(fix_spread_deg, na.rm = TRUE),
+            sd_spread_deg   = sd(fix_spread_deg, na.rm = TRUE))
+```
+
+```{r}
+fixDisp_diff <- t.test(fix_spread_deg ~ group, df.eye)
+fixDisp_diff
+```
+
+```{r}
+fixationPlot <- df.eye %>%
+  ggplot(., aes(x = group, 
+                y = fix_spread_deg, 
+                alpha = group)) +
+  geom_bar(aes(alpha = group),
+           stat = "summary", fun = "mean",
+           width = 0.9, position = "dodge") +
+  geom_point(aes(alpha = group),size = 1, na.rm = TRUE) +
+  scale_alpha_manual(values = c("adolescents" = 0.45, "Adults" = 0.9)) +
+  theme(legend.position = "none",
+        aspect.ratio = 2,
+        axis.text.y = element_text(size = 16)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(x = "Age Group", y = "Fixation Spread (°, DVA)")
+
+fixationPlot
+```
+
+### Fixation Distribution (Gaussian): adolescents and adults overlap.
+Pooling all fixations (each participant centered on their own mean fixation, converted to degrees of visual angle), the distribution of fixation positions is tightly Gaussian around the center and nearly identical across groups. Each group is shown as a circle whose radius is the 95% Gaussian spread (the bivariate-normal contour forced to be circular, using the average of the x and y variance).
+
+```{r}
+# center each subject on their own mean fixation (x/y are already in deg of visual angle)
+fix_plot <- fix_all %>%
+  mutate(group = recode(group, teens = "adolescents", adults = "Adults"),
+         group = factor(group, levels = c("adolescents", "Adults"))) %>%
+  group_by(subject) %>%
+  mutate(dx = x - mean(x, na.rm = TRUE),
+         dy = y - mean(y, na.rm = TRUE)) %>%
+  ungroup() %>%
+  filter(abs(dx) < 5, abs(dy) < 5)   # trim extreme tracking-loss outliers for plotting
+
+# per-group circle: center = group mean, radius = 95% isotropic-Gaussian radius
+# (forces the bivariate-normal ellipse to a circle, using the average of x & y variance)
+circle_df <- fix_plot %>%
+  group_by(group) %>%
+  summarize(cx = mean(dx), cy = mean(dy),
+            r  = sqrt(qchisq(0.95, df = 2) * (var(dx) + var(dy)) / 2), .groups = "drop") %>%
+  crossing(theta = seq(0, 2 * pi, length.out = 100)) %>%
+  mutate(ex = cx + r * cos(theta), ey = cy + r * sin(theta))
+
+set.seed(1)
+# shuffle rows so the two groups interleave in draw order -> both stay visible
+fp <- slice_sample(fix_plot, n = 4000) %>% slice_sample(prop = 1)
+# red reference circle at 2 deg of visual angle around fixation
+fix_circle_deg <- 2
+circle_ref <- tibble(theta = seq(0, 2 * pi, length.out = 200),
+                     ex = fix_circle_deg * cos(theta), ey = fix_circle_deg * sin(theta))
+fixDistPlot <- ggplot() +
+  # crosshair axes through the origin (screen center): horizontal + vertical line at 0
+  geom_hline(yintercept = 0, color = "gray40", linewidth = 0.5) +
+  geom_vline(xintercept = 0, color = "gray40", linewidth = 0.5) +
+  # adolescents = gray open circles, Adults = black filled dots (interleaved so neither is hidden)
+  geom_point(data = fp, aes(dx, dy, color = group, shape = group), alpha = 0.5, size = 1.3) +
+  geom_path(data = circle_ref, aes(ex, ey), color = "red", linewidth = 1.1) +
+  coord_fixed(xlim = c(-30, 30), ylim = c(-30, 30)) +
+  scale_x_continuous(breaks = seq(-30, 30, 10)) +
+  scale_y_continuous(breaks = seq(-30, 30, 10)) +
+  scale_color_manual(values = c("adolescents" = "gray50", "Adults" = "black")) +
+  scale_shape_manual(values = c("adolescents" = 1, "Adults" = 16)) +
+  labs(x = "Degrees Visual Angle from Screen Center (X)", y = "Degrees Visual Angle from Screen Center (Y)") +
+  theme(legend.position = "none") +
+  theme(text = element_text(family = "Avenir", size = 14),
+        axis.text = element_text(size = 16),
+        axis.line = element_blank())
+
+fixDistPlot
+ggsave(file.path(output_directory, "noiseRevision_fixationDistribution.png"),
+       fixDistPlot, width = 5, height = 5, dpi = 300)
+```
+
+### Gaze traces (scanpath colored by time), per run
+Reproduces the MATLAB gaze-trace figure for each run: time-colored scanpath on the screen (degrees of
+visual angle), white fixation circle, saccade count in the subtitle. Saved to `gaze_traces/<group>/`.
+(Calibration/validation/drift strings live in the EyeLink `.asc` headers, not the cleaned samples, so
+they are placeholder arguments here.)
+```{r gaze-traces}
+# gaze_dir <- file.path(output_directory, "gaze_traces")
+# 
+# # one trace from a run's sample tibble (dat = t,x,y in deg) + its saccade count
+# plot_gaze_trace <- function(dat, title, n_sacc, fix_radius = 1.5,
+#                             calib = "GOOD Calibration", valid = "POOR Validation",
+#                             drift = "NO Drift Correction") {
+#   d  <- dat %>% mutate(time_s = (t - min(t, na.rm = TRUE)) / 1000)
+#   th <- seq(0, 2 * pi, length.out = 200)
+#   circ <- tibble(cx = fix_radius * cos(th), cy = fix_radius * sin(th))
+#   ggplot(d, aes(x, y, color = time_s)) +
+#     geom_path(linewidth = 0.3, na.rm = TRUE) +
+#     geom_path(data = circ, aes(cx, cy), color = "gray15", linewidth = 1.1, inherit.aes = FALSE) +
+#     scale_color_gradientn(colours = c("#00E5FF", "#2E7BFF", "#9B30FF", "#FF00FF"),
+#                           name = "Time (seconds)") +
+#     coord_fixed(xlim = c(-30, 30), ylim = c(-23, 23), expand = FALSE) +
+#     labs(x = "Degrees Visual Angle from Screen Center (X)",
+#          y = "Degrees Visual Angle from Screen Center (Y)",
+#          title = title,
+#          subtitle = sprintf("%d Saccades | %s | %s | %s", n_sacc, calib, valid, drift)) +
+#     theme_classic() +
+#     theme(text = element_text(family = "Avenir", size = 14),
+#           plot.title = element_text(hjust = 0.5, face = "bold"),
+#           plot.subtitle = element_text(hjust = 0.5, face = "bold"))
+# }
+# 
+# # loop over all runs (reuses `runs`: dat + amps already computed), save one PNG per run
+# for (i in seq_len(nrow(runs))) {
+#   r <- runs[i, ]
+#   ttl <- tools::file_path_sans_ext(basename(r$path))
+#   g   <- ifelse(r$group == "teens", "adolescents", "Adults")
+#   dir.create(file.path(gaze_dir, g), recursive = TRUE, showWarnings = FALSE)
+#   p <- plot_gaze_trace(r$dat[[1]], title = ttl, n_sacc = sum(r$amps[[1]] >= 1))
+#   ggsave(file.path(gaze_dir, g, paste0("gazeTrace_", ttl, ".png")), p,
+#          width = 8, height = 6.5, dpi = 300)
+# }
+# message("Saved ", nrow(runs), " gaze traces to ", gaze_dir)
+# 
+# # show one example (a clean fixator and a noisy run, if present)
+# ex <- runs %>% filter(subject %in% c("CLC06", "INW06")) %>% group_by(subject) %>% slice(1) %>% ungroup()
+# if (nrow(ex)) for (i in seq_len(nrow(ex)))
+#   print(plot_gaze_trace(ex$dat[[i]], tools::file_path_sans_ext(basename(ex$path[i])),
+#                         sum(ex$amps[[i]] >= 1)))
+```
+
+```{r}
+# fix_plot %>%
+#   pivot_longer(c(dx, dy), names_to = "axis", values_to = "deg") %>%
+#   mutate(axis = recode(axis, dx = "horizontal", dy = "vertical")) %>%
+#   ggplot(aes(deg, color = group, fill = group)) +
+#   geom_density(alpha = 0.25) +
+#   facet_wrap(~ axis) +
+#   coord_cartesian(xlim = c(-2, 2)) +
+#   labs(x = "offset from center (deg)", y = "density",
+#        title = "Fixation distribution by axis (adolescents vs adults)") +
+#   theme_minimal()
+```
+
+### Number of Saccades: No significant difference between adolescents and adults.
+Saccades are expressed per minute because recordings differ in length across participants. Saccades are detected from the functionally blink-removed gaze samples as intervals where eye velocity exceeds 30 deg/s for at least 8 ms; intervals spanning a blink/tracking gap are skipped so blinks are never counted as saccades. Only visually-guided saccades (amplitude >= 2 deg of visual angle, matching the 2 deg fixation reference circle) are counted, excluding microsaccades and small fixational movements (<2 deg).
+
+```{r}
+df.eye %>%
+  group_by(group) %>%
+  summarize(mean_sacc_rate = mean(sacc_rate, na.rm = TRUE),
+            sd_sacc_rate   = sd(sacc_rate, na.rm = TRUE))
+```
+
+```{r}
+saccRate_diff <- t.test(sacc_rate ~ group, df.eye)
+saccRate_diff
+```
+
+```{r}
+saccadePlot <- df.eye %>%
+  ggplot(., aes(x = group, 
+                y = sacc_rate, 
+                alpha = group)) +
+  geom_bar(aes(alpha = group),
+           stat = "summary", fun = "mean",
+           width = 0.9, position = "dodge") +
+  geom_point(aes(alpha = group),size = 1, na.rm = TRUE) +
+  scale_alpha_manual(values = c("adolescents" = 0.45, "Adults" = 0.9)) +
+  theme(legend.position = "none",
+        aspect.ratio = 2,
+        axis.text.y = element_text(size = 16)) +
+  scale_y_continuous(breaks = seq(0, 30, 10),
+                     limits = c(0, max(30, max(df.eye$sacc_rate, na.rm = TRUE))),
+                     expand = expansion(mult = c(0, 0.05))) +
+  labs(x = "Age Group", y = "Saccades Per Minute (>2°)")
+
+saccadePlot
+
+```
+
+#### Per-run saccade counts
+Saccade counts for every run (including runs that fail QC, `qc_ok = FALSE`, which are excluded from the per-subject metrics above). Saved to `toonCat_eyetracking_perRun.csv`.
+```{r}
+write_csv(df.run, "~/Documents/projects/toonCat/analysis/data/toonCat_eyetracking_perRun.csv")
+df.run %>% print(n = Inf)
+```
+
+## fMRI Data Quality: tSNR, Head Motion, and pRF Model Fit
+To rule out that group differences in the fMRI data are driven by differences in data quality, we compared temporal signal-to-noise ratio (tSNR), head motion (within- and between-scan), and pRF model fit (variance explained, r2) between adolescents and adults. tSNR and r2 are computed per ROI and averaged within each participant; motion is a per-participant measure.
+
+```{r}
+tSNR_LMM <- lmer(voxeltsnr ~ hemi * group * roi + (1|session), tsnr) %>%
+  joint_tests()
+
+tSNR_LMM
+```
+
+
+```{r quality-setup, include=FALSE}
+tsnr   <- read.csv("~/Documents/projects/toonCat/analysis/data/toonCat_tSNR_ALL.csv")
+motion <- read.csv("~/Documents/projects/toonCat/analysis/data/toonCat_motion_ALL.csv")
+r2     <- read.csv("~/Documents/projects/toonCat/analysis/data/toonCat_r2_ve0_ALL.csv")
+
+to_group <- function(g) ifelse(str_detect(tolower(g), "adult"), "adults", "kids")
+
+# tSNR and r2: average ROIs/hemis within each participant
+df.tsnr <- tsnr %>%
+  mutate(group = to_group(group),
+         group = case_match(group,
+                             "kids" ~ "adolescents",
+                             "adults" ~ "Adults"),
+         group = factor(group, levels = c("adolescents", "Adults"))) %>%
+  group_by(session, group) %>%
+  summarize(voxeltsnr = mean(voxeltsnr, na.rm = TRUE),
+            tsnr      = mean(tsnr, na.rm = TRUE), .groups = "drop")
+
+df.tsnr_hemi <- tsnr %>%
+  group_by(session, hemi) %>%
+  summarize(voxeltsnr = mean(voxeltsnr, na.rm = TRUE),
+            tsnr      = mean(tsnr, na.rm = TRUE), .groups = "drop")
+
+df.motion <- motion %>% 
+  mutate(group = to_group(group),
+        group = case_match(group,
+         "kids" ~ "adolescents",
+         "adults" ~ "Adults"),
+         group = factor(group, levels = c("adolescents", "Adults")))
+
+df.r2 <- r2 %>%
+  mutate(group = to_group(group),
+        group = case_match(group,
+         "kids" ~ "adolescents",
+         "adults" ~ "Adults"),
+         group = factor(group, levels = c("adolescents", "Adults"))) %>%
+  group_by(subject, group) %>%
+  summarize(r2 = mean(r2, na.rm = TRUE), .groups = "drop")
+```
+
+### tSNR: No significant difference between adolescents and adults.
+```{r}
+df.tsnr %>%
+  group_by(group) %>%
+  summarize(mean_tsnr = mean(voxeltsnr, na.rm = TRUE),
+            sd_tsnr   = sd(voxeltsnr, na.rm = TRUE))
+
+df.tsnr_hemi %>%
+  group_by(hemi) %>%
+  summarize(mean_tsnr = mean(voxeltsnr, na.rm = TRUE),
+            sd_tsnr   = sd(voxeltsnr, na.rm = TRUE))
+```
+
+```{r}
+tsnr_diff <- t.test(voxeltsnr ~ group, df.tsnr)
+tsnr_diff
+```
+```{r}
+tsnr_hemi_diff <- t.test(voxeltsnr ~ hemi, df.tsnr_hemi)
+tsnr_hemi_diff
+```
+
+```{r}
+tsnrPlot <- df.tsnr %>%
+  ggplot(., aes(x = group, 
+                y = voxeltsnr, 
+                alpha = group)) +
+  geom_bar(aes(alpha = group),
+           stat = "summary", fun = "mean",
+           width = 0.9, position = "dodge") +
+  geom_point(aes(alpha = group),size = 1, na.rm = TRUE) +
+  scale_alpha_manual(values = c("adolescents" = 0.45, "Adults" = 0.9)) +
+  scale_y_continuous(limits = c(0, 150), breaks = seq(0, 150, 50), expand = expansion(mult = c(0, 0.05))) +
+  theme(legend.position = "none",
+        aspect.ratio = 2,
+        axis.text.y = element_text(size = 16)) +
+  labs(x = "Age Group", y = "Average tSNR (voxel level)")
+
+tsnrPlot
+```
+
+### tSNR by Hemisphere: no significant difference between left and right.
+```{r}
+df.tsnr_hemi %>%
+  group_by(hemi) %>%
+  summarize(mean_tsnr = mean(voxeltsnr, na.rm = TRUE),
+            sd_tsnr   = sd(voxeltsnr, na.rm = TRUE))
+
+tsnr_hemi_diff
+```
+
+```{r}
+tsnrHemiPlot <- df.tsnr_hemi %>%
+  mutate(hemi = factor(hemi, levels = c("lh", "rh"), labels = c("Left", "Right"))) %>%
+  ggplot(., aes(x = hemi,
+                y = voxeltsnr,
+                alpha = hemi)) +
+  geom_bar(aes(alpha = hemi),
+           stat = "summary", fun = "mean",
+           width = 0.9, position = "dodge") +
+  geom_point(aes(alpha = hemi), size = 1, na.rm = TRUE) +
+  scale_alpha_manual(values = c("Left" = 0.45, "Right" = 0.9)) +
+  scale_y_continuous(limits = c(0, 150), breaks = seq(0, 150, 50), expand = expansion(mult = c(0, 0.05))) +
+  theme(legend.position = "none",
+        aspect.ratio = 2,
+        axis.text.y = element_text(size = 16)) +
+  labs(x = "Hemisphere", y = "Average tSNR (voxel level)")
+
+tsnrHemiPlot
+```
+
+### tSNR by Hemisphere and ROI
+Per-voxel tSNR per ROI and hemisphere, by group; bars are the group mean, points are individual participants. ROIs colored by category domain (Figure 3 palette).
+```{r}
+# Figure 3 colors ROIs by category domain (faces/bodies/places); words get a 4th color.
+# (fig3_domain_colors and roi_domain are also defined in the r2-by-ROI chunk.)
+fig3_domain_colors <- c(face = "#FF0000", body = "#E4CD04", place = "#008000", word = "#000066")
+roi_domain <- c(IOG_faces = "face", pFus_faces = "face", mFus_faces = "face", pSTS_faces = "face",
+                OTS_bodies = "body", LOS_limbs = "body", ITG_limbs = "body", MTG_limbs = "body",
+                CoS_places = "place", MOG_places = "place", IPS_places = "place",
+                pOTS_words = "word", mOTS_words = "word")
+
+df.tsnr_byROI <- tsnr %>%
+  # each ROI lives in exactly one atlas (toon / toon_JC; pSTS_faces & MTG_limbs in adultAvg) -> no dedup needed
+  filter(!(roi == "mOTS_words" & hemi == "rh")) %>%      # drop right-hemisphere mOTS
+  mutate(group  = case_match(group,
+                             "KidsTeens" ~ "adolescents",
+                             "Adults"    ~ "Adults"),
+         group  = factor(group, levels = c("adolescents", "Adults")),
+         hemi   = factor(hemi, levels = c("lh", "rh"), labels = c("Left", "Right")),
+         ROI    = factor(roi, levels = roi_order_cat),    # roi_order_cat includes blank/blank1 stream gaps
+         domain = factor(roi_domain[roi], levels = c("face", "body", "place", "word")))
+
+# keep empty x levels (blank/blank1 between streams, and the dropped rh-mOTS slot) as gaps;
+# blank out their tick labels
+roi_x_labels <- function(x) ifelse(x %in% c("blank", "blank1"), "", gsub("_", "-", x))
+
+tsnr_byROI_Plot <- df.tsnr_byROI %>%
+  ggplot(aes(x = ROI, y = voxeltsnr, fill = domain, alpha = group, group = group)) +
+  geom_bar(stat = "summary", fun = "mean",
+           position = position_dodge(width = 0.8), width = 0.7) +
+  geom_point(position = position_dodge(width = 0.8), size = 0.5, alpha = 0.4,
+             na.rm = TRUE, show.legend = FALSE) +
+  scale_fill_manual(values = fig3_domain_colors) +
+  scale_alpha_manual(values = c("adolescents" = 0.45, "Adults" = 0.9)) +
+  scale_x_discrete(drop = FALSE, labels = roi_x_labels) +
+  facet_grid(hemi ~ .) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(x = NULL, y = "Average tSNR (voxel level)")
+
+tsnr_byROI_Plot
+
+```
+
+### Within-Scan Motion: No significant difference between adolescents and adults.
+```{r}
+df.motion %>%
+  group_by(group) %>%
+  summarize(mean_motion = mean(meanwithinmotion, na.rm = TRUE),
+            sd_motion   = sd(meanwithinmotion, na.rm = TRUE))
+```
+
+```{r}
+withinMotion_diff <- t.test(meanwithinmotion ~ group, df.motion)
+withinMotion_diff
+```
+
+```{r}
+withinMotionPlot <- df.motion %>%
+  ggplot(., aes(x = group, 
+                y = meanwithinmotion, 
+                alpha = group)) +
+  geom_bar(aes(alpha = group),
+           stat = "summary", fun = "mean",
+           width = 0.9, position = "dodge") +
+  geom_hline(yintercept = 2) +
+  geom_point(aes(alpha = group),size = 1, na.rm = TRUE) +
+  scale_alpha_manual(values = c("adolescents" = 0.45, "Adults" = 0.9)) +
+  theme(legend.position = "none",
+        aspect.ratio = 2,
+        axis.text.y = element_text(size = 16)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(x = "Age Group", y = "Within-Scan Motion (mm)")
+
+withinMotionPlot
+```
+
+### Between-Scan Motion: No significant difference between adolescents and adults.
+```{r}
+df.motion %>%
+  group_by(group) %>%
+  summarize(mean_motion = mean(meanbetweenmotion, na.rm = TRUE),
+            sd_motion   = sd(meanbetweenmotion, na.rm = TRUE))
+```
+
+```{r}
+betweenMotion_diff <- t.test(meanbetweenmotion ~ group, df.motion)
+betweenMotion_diff
+```
+
+```{r}
+betweenMotionPlot <- df.motion %>%
+  ggplot(., aes(x = group, 
+                y = meanbetweenmotion, 
+                alpha = group)) +
+  geom_bar(aes(alpha = group),
+           stat = "summary", fun = "mean",
+           width = 0.9, position = "dodge") +
+  geom_hline(yintercept = 2) +
+  geom_point(aes(alpha = group),size = 1, na.rm = TRUE) +
+  scale_alpha_manual(values = c("adolescents" = 0.45, "Adults" = 0.9)) +
+  theme(legend.position = "none",
+        aspect.ratio = 2,
+        axis.text.y = element_text(size = 16)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(x = "Age Group", y = "Between-Scan Motion (mm)")
+
+betweenMotionPlot
+
+```
+
+### pRF Model Fit (r2): No significant difference between adolescents and adults.
+Note: the test runs across whichever age groups are present in `toonCat_r2_ALL.csv` (Kids/Teens are collapsed to adolescents). If only adolescents are present, generate adult pRFset files to enable the adolescents-vs-adults comparison.
+```{r}
+df.r2 %>%
+  group_by(group) %>%
+  summarize(mean_r2 = mean(r2, na.rm = TRUE),
+            sd_r2   = sd(r2, na.rm = TRUE))
+```
+
+```{r}
+if (dplyr::n_distinct(df.r2$group) > 1) {
+  r2_diff <- t.test(r2 ~ group, df.r2)
+  print(r2_diff)
+} else {
+  message("Only one age group present in r2 data; cannot compare adolescents to adults.")
+}
+```
+
+```{r}
+r2Plot <- df.r2 %>%
+  ggplot(., aes(x = group, 
+                y = r2, 
+                alpha = group)) +
+  geom_bar(aes(alpha = group),
+           stat = "summary", fun = "mean",
+           width = 0.9, position = "dodge") +
+  geom_hline(yintercept = 0.2) +
+  geom_point(aes(alpha = group),size = 1, na.rm = TRUE) +
+  scale_alpha_manual(values = c("adolescents" = 0.45, "Adults" = 0.9)) +
+  theme(legend.position = "none",
+        aspect.ratio = 2,
+        axis.text.y = element_text(size = 16)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(x = "Age Group", y = expression(Average~pRF~R^2~(voxel~level)))
+
+r2Plot
+
+```
+
+### pRF Model Fit (r2) by Hemisphere and ROI
+pRF variance explained per ROI and hemisphere, by group; bars are the group mean, points are individual participants, dashed line marks the r2 = 0.2 threshold. ROIs colored with the toonCat palette (`roi_colors`).
+```{r}
+# Figure 3 colors ROIs by category domain (faces/bodies/places); words get a 4th color.
+fig3_domain_colors <- c(face = "#FF0000", body = "#E4CD04", place = "#008000", word = "#000066")
+roi_domain <- c(IOG_faces = "face", pFus_faces = "face", mFus_faces = "face", pSTS_faces = "face",
+                OTS_bodies = "body", LOS_limbs = "body", ITG_limbs = "body", MTG_limbs = "body",
+                CoS_places = "place", MOG_places = "place", IPS_places = "place",
+                pOTS_words = "word", mOTS_words = "word")
+
+df.r2_byROI <- r2 %>%
+  # each ROI lives in exactly one atlas (toon / toon_JC; pSTS_faces & MTG_limbs in adultAvg) -> no dedup needed
+  filter(!(roi == "mOTS_words" & hemi == "rh")) %>%      # drop right-hemisphere mOTS
+  mutate(group  = case_match(group,
+                             "KidsTeens" ~ "adolescents",
+                             "Adults"    ~ "Adults"),
+         group  = factor(group, levels = c("adolescents", "Adults")),
+         hemi   = factor(hemi, levels = c("lh", "rh"), labels = c("Left", "Right")),
+         ROI    = factor(roi, levels = roi_order_cat),    # roi_order_cat includes blank/blank1 stream gaps
+         domain = factor(roi_domain[roi], levels = c("face", "body", "place", "word")))
+
+r2_byROI_Plot <- df.r2_byROI %>%
+  ggplot(aes(x = ROI, y = r2, fill = domain, alpha = group, group = group)) +
+  geom_bar(stat = "summary", fun = "mean",
+           position = position_dodge(width = 0.8), width = 0.7) +
+  geom_point(position = position_dodge(width = 0.8), size = 0.5, alpha = 0.4,
+             na.rm = TRUE, show.legend = FALSE) +
+  geom_hline(yintercept = 0.2, linetype = "dashed") +
+  scale_fill_manual(values = fig3_domain_colors) +
+  scale_alpha_manual(values = c("adolescents" = 0.45, "Adults" = 0.9)) +
+  scale_x_discrete(drop = FALSE, labels = roi_x_labels) +   # blank/blank1 -> stream gaps
+  facet_grid(hemi ~ .) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  labs(x = NULL, y = expression(Average~pRF~R^2~(voxel~level)))
+
+r2_byROI_Plot
+
+```
+
+# Save all figures
+```{r save-figures}
+dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
+
+# filename -> (plot variable name, width, height). Reference by NAME so a missing/not-yet-run
+# plot is skipped (with a note) instead of erroring the whole chunk.
+figs <- list(
+  taskScores            = list(v = "scorePlot",         w = 4, h = 3.5),
+  fixationSpread        = list(v = "fixationPlot",      w = 3, h = 4),
+  fixationDistribution  = list(v = "fixDistPlot",       w = 5, h = 5),
+  saccadeRate           = list(v = "saccadePlot",       w = 3, h = 4),
+  tSNR                  = list(v = "tsnrPlot",          w = 3, h = 4),
+  tSNR_byHemisphere     = list(v = "tsnrHemiPlot",      w = 3, h = 4),
+  tSNR_byROI            = list(v = "tsnr_byROI_Plot",   w = 9, h = 6),
+  withinScanMotion      = list(v = "withinMotionPlot",  w = 3, h = 4),
+  betweenScanMotion     = list(v = "betweenMotionPlot", w = 3, h = 4),
+  pRF_r2                = list(v = "r2Plot",            w = 3, h = 4),
+  pRF_r2_byROI          = list(v = "r2_byROI_Plot",     w = 9, h = 6)
+)
+
+saved <- 0
+for (nm in names(figs)) {
+  vn <- figs[[nm]]$v
+  if (!exists(vn)) { message("skip ", nm, " (", vn, " not found)"); next }
+  ggsave(file.path(output_directory, paste0("noiseRevision_", nm, ".png")),
+         plot = get(vn), width = figs[[nm]]$w, height = figs[[nm]]$h, dpi = 300)
+  saved <- saved + 1
+}
+message("Saved ", saved, " of ", length(figs), " figures to ", output_directory)
+```

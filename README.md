@@ -23,7 +23,9 @@ Code should run on your local machine assuming the following dependencies
 - dplyr
 - ggplot2
 - lme4
+- lmerTest
 - emmeans
+- broom.mixed
 - janitor
 - extrafont
 - kableExtra
@@ -31,6 +33,14 @@ Code should run on your local machine assuming the following dependencies
 - broom
 - rlang
 - fs
+- gt
+- ggh4x
+- patchwork
+- purrr
+- R.matlab
+
+### Eye-tracking Analysis
+- Python 3 with numpy, scipy, matplotlib
 
 ## Folder Structure
 `processing`: Includes numbered MATLAB scripts used to process the structural and functional data.
@@ -39,7 +49,13 @@ Code should run on your local machine assuming the following dependencies
 - `utils`: Contains functions for each of the steps, organized via subdirectories `step#/`
 
 `analysis`: Includes code used to analyze data extracted from the `processing` code, perform LMMs, and generate output figures.
-- `code`: Contains R and R markdown files used to generate main figures and supplementary figures. 
+- `code`: Contains R and R markdown files used to generate main figures and supplementary figures.
+  - `toonCat_fig3.Rmd`, `toonCat_fig4.Rmd`, `toonCat_fig5_ROISize.Rmd`, `toonCat_fig6.Rmd`: main figure panels and post-hoc tests
+  - `toonCat_supplementaryTables.Rmd`, `toonCat_SI_FiguresTables.Rmd`, `toonCat_supplementaryFigures.Rmd`: supplementary tables and figures
+  - `toonCat_noiseAnalyses_revision.Rmd`: data-quality analyses added in revision (task performance, eye tracking, head motion, tSNR, pRF model fit R²)
+  - `toonCat_subsampled100vox.Rmd`: reproduction of pRF and coverage analyses with ROIs subsampled to 100 voxels (Supplementary Table 15)
+  - `toonCat_stable16_r2_ci.R`: bootstrapped KS-tests of pRF R² (Supplementary Table 16)
+  - `toonCat_saccades_FuncBlinkRemoved.py`, `toonCat_saccades_plots.py`: fixation spread and saccade rate from eye-tracking data
 - `data`: Contains processed data used for figure generation and statistics
 - `figures_tables`: Contains `main` figure outputs and `supplement` figures outputes and tables. Tables contain full statistical outputs in .png and .csv formats.
 

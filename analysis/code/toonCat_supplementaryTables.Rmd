@@ -1,0 +1,1343 @@
+---
+title: "toonCat_supplementaryTables"
+output: html_document
+date: "2025-11-05"
+---
+
+TOONCAT SUPPLEMENTARY FIGURES AND TABLES
+Supplementary tables and figures, in order of reference, for the toonCat manuscript. Includes only the R generated plots, but other figures are noted. See MATLAB scripts and figures folder for other figure components.
+
+```{r Setup, warning=F, message=F, echo=FALSE}
+# Setup file
+source("~/Documents/projects/toonCat/analysis/code/toonCat_analysisSetup.R")
+
+# Set global variables
+output_directory <- "~/Documents/projects/toonCat/analysis/results/supplementary/tables/"
+LMM_filters <- c("hemi != 'mh'", "hemi != 'zh'", "ROI != 'blank'","ROI != 'blank1'", "category != 'word'", "category != 'words'")
+ventralLMM_filters <- c("hemi != 'mh'", "hemi != 'zh'", "ROI != 'blank'","ROI != 'blank1'", "stream == 'ventral'")
+retinotopyLMM_filters <- c("ROI %in% c('V1', 'V2', 'V3')", "hemi != 'mh'", "hemi != 'zh'")
+```
+
+
+# FUNCTIONS
+```{r run_and_format_analysis}
+run_and_format_analysis <- function(analysis_list, file_path, file_name, bold_p_value = 0.05, digits = 3) {
+
+  # Helper function to process individual analyses
+  run_LMM_analysis <- function(data, formula, filters = NULL, analysis_name) {
+  # Apply filters dynamically if provided
+  if (!is.null(filters) && length(filters) > 0) {
+    filtered_data <- data %>%
+      filter(!!!rlang::parse_exprs(filters)) %>%
+      na.omit()
+  } else {
+    filtered_data <- data %>%
+      na.omit()
+  }
+
+  # Fit the model and perform joint tests
+  model <- lmerTest::lmer(formula, data = filtered_data)
+  results <- joint_tests(model)
+
+  # Add the analysis name as a column
+  results <- results %>%
+    mutate(Analysis = analysis_name)
+
+  return(results)
+}
+
+
+  # Process each analysis
+  combined_results <- bind_rows(lapply(analysis_list, function(analysis) {
+    run_LMM_analysis(
+      data = analysis$data,
+      formula = analysis$formula,
+      filters = analysis$filters,
+      analysis_name = analysis$analysis_name
+    )
+  }))
+
+  # Define the format and save function
+  format_and_save_table <- function(results, file_path, bold_p = TRUE, bold_p_value, digits) {
+    # Format p-values and F-ratios
+    format_p <- function(p) {
+      ifelse(p < 0.0001, format(p, scientific = TRUE, digits = 4), format(p, nsmall = 3))
+    }
+    format_F <- function(Fval) {
+      format(Fval, nsmall = digits)
+    }
+
+    # Reorder columns to make "Analysis" the first column
+    formatted_results <- results %>%
+      mutate(
+        p.value = as.numeric(p.value),
+        p.value = sapply(p.value, format_p),
+        F.ratio = sapply(F.ratio, format_F)
+      ) %>%
+      select(Analysis, everything()) %>%  # Ensure Analysis is the first column
+      group_by(Analysis) %>%
+      mutate(Analysis = ifelse(row_number() == 1, Analysis, "")) %>%  # Show Analysis name only in the first row
+      ungroup()
+
+    # Identify the rows where a new analysis starts (first row of each analysis group)
+    add_space_rows <- which(formatted_results$Analysis != "")
+
+    # Generate the table
+    table <- formatted_results %>%
+      kable(format = "html", booktabs = TRUE, digits = digits) %>%
+      kable_classic(full_width = FALSE, html_font = "Calibri")
+
+    # Add spacing above rows where a new analysis starts (excluding the first analysis)
+    for (row in add_space_rows[-1]) {  # Skip the first analysis row
+      table <- table %>%
+        row_spec(row, extra_css = "border-top: 10px solid white;")
+    }
+
+    # Apply bolding conditionally based on `bold_p`
+    if (bold_p) {
+      table <- table %>%
+        row_spec(which(as.numeric(formatted_results$p.value) < bold_p_value), bold = TRUE)
+    }
+
+    # Save the table
+    save_kable(table, file = file_path, zoom = 3, density = 500)
+
+    return(formatted_results)  # Return the formatted results in case further use is needed
+  }
+
+  # Construct full file paths
+  bold_file_path <- file.path(file_path, "bold", paste0(file_name, "_bold.png"))
+  no_bold_file_path <- file.path(file_path, paste0(file_name, ".png"))
+
+  # Save bolded table
+  formatted_results_bold <- format_and_save_table(
+    results = combined_results,
+    file_path = bold_file_path,
+    bold_p = TRUE,
+    bold_p_value = bold_p_value,
+    digits = digits
+  )
+
+  # Save non-bolded table
+  formatted_results_no_bold <- format_and_save_table(
+    results = combined_results,
+    file_path = no_bold_file_path,
+    bold_p = FALSE,
+    bold_p_value = bold_p_value,
+    digits = digits
+  )
+
+  # Return combined results and paths to saved files
+  return(list(
+    combined_results = combined_results,
+    bold_output_file = bold_file_path,
+    no_bold_output_file = no_bold_file_path
+  ))
+}
+```
+
+```{r run_and_format_betas}
+run_and_format_betas <- function(analysis_list, file_path, file_name,
+                                 bold_p_value = 0.05, digits = 3,
+                                 ci_level = 0.95) {
+
+  suppressPackageStartupMessages({
+    library(dplyr)
+    library(tidyr)
+    library(kableExtra)
+    library(knitr)
+    library(lmerTest)
+    library(broom.mixed)
+    library(emmeans)
+    library(rlang)
+  })
+
+  # ---------------- Helper function: run one LMM ----------------
+  run_LMM_betas <- function(data, formula, filters = NULL, analysis_name) {
+
+    # Apply filters dynamically if provided
+    if (!is.null(filters) && length(filters) > 0) {
+      filtered_data <- data %>%
+        dplyr::filter(!!!rlang::parse_exprs(filters)) %>%
+        tidyr::drop_na()
+    } else {
+      filtered_data <- data %>% tidyr::drop_na()
+    }
+
+    # Fit the model
+    model <- lmerTest::lmer(formula, data = filtered_data)
+
+    # Extract fixed effects
+    results <- broom.mixed::tidy(
+      model, effects = "fixed", conf.int = TRUE, conf.level = ci_level
+    ) %>%
+      transmute(
+        Analysis = analysis_name,
+        Term     = term,
+        Beta     = estimate,
+        SE       = std.error,
+        df       = df,
+        t        = statistic,
+        p.value  = p.value,
+        CI_low   = conf.low,
+        CI_high  = conf.high
+      )
+
+    return(results)
+  }
+
+  # ---------------- Run all analyses ----------------
+  combined_results <- bind_rows(lapply(analysis_list, function(analysis) {
+    run_LMM_betas(
+      data = analysis$data,
+      formula = analysis$formula,
+      filters = analysis$filters,
+      analysis_name = analysis$analysis_name
+    )
+  }))
+
+  # ---------------- Formatting and Saving ----------------
+  format_and_save_table <- function(results, file_path, bold_p = TRUE,
+                                    bold_p_value, digits) {
+
+    p_numeric <- results$p.value
+
+    # ---- P-value formatter (always show scientific small p's) ----
+    format_p <- function(p) {
+      vapply(p, function(x) {
+        if (is.na(x)) return("")
+        if (x < .Machine$double.xmin || x == 0) {
+          return("<2.2e-308")
+        } else if (x < 1e-4) {
+          return(formatC(x, format = "e", digits = 3))
+        } else {
+          return(formatC(x, format = "f", digits = 3))
+        }
+      }, character(1))
+    }
+
+    format_num <- function(x) format(round(x, digits), nsmall = digits)
+    format_ci <- function(lo, hi, dig = digits) {
+      paste0("[", format(round(lo, dig), nsmall = dig), ", ",
+                  format(round(hi, dig), nsmall = dig), "]")
+    }
+
+    formatted_results <- results %>%
+      mutate(
+        Beta    = format_num(Beta),
+        SE      = format_num(SE),
+        df      = ifelse(is.na(df), "", format(round(df, 1), nsmall = 1)),
+        t       = format_num(t),
+        p.value = as.character(format_p(p.value)),
+        CI      = format_ci(CI_low, CI_high, digits)
+      ) %>%
+      select(Analysis, Term, Beta, SE, df, t, p.value, CI) %>%
+      group_by(Analysis) %>%
+      mutate(Analysis = ifelse(row_number() == 1, Analysis, "")) %>%
+      ungroup()
+
+    add_space_rows <- which(formatted_results$Analysis != "")
+
+    table <- formatted_results %>%
+      kable(format = "html", booktabs = TRUE, digits = digits,
+            col.names = c("Analysis", "Term", "β", "SE", "df", "t", "p", "95% CI")) %>%
+      kable_classic(full_width = FALSE, html_font = "Calibri") %>%
+      column_spec(1, bold = TRUE)
+
+    if (length(add_space_rows) > 1) {
+      for (row in add_space_rows[-1]) {
+        table <- table %>% row_spec(row, extra_css = "border-top: 10px solid white;")
+      }
+    }
+
+    if (bold_p) {
+      bold_rows <- which(p_numeric < bold_p_value)
+      if (length(bold_rows)) {
+        table <- table %>% row_spec(bold_rows, bold = TRUE)
+      }
+    }
+
+    save_kable(table, file = file_path, zoom = 3, density = 500)
+    invisible(formatted_results)
+  }
+
+  # ---------------- Save bolded and non-bolded versions ----------------
+  bold_file_path    <- file.path(file_path,"bold", paste0(file_name, "_betas_bold.png"))
+  no_bold_file_path <- file.path(file_path, paste0(file_name, "_betas.png"))
+
+  formatted_results_bold <- format_and_save_table(
+    combined_results, bold_file_path, bold_p = TRUE,
+    bold_p_value = bold_p_value, digits = digits
+  )
+
+  formatted_results_no_bold <- format_and_save_table(
+    combined_results, no_bold_file_path, bold_p = FALSE,
+    bold_p_value = bold_p_value, digits = digits
+  )
+
+  list(
+    combined_results = combined_results,
+    bold_output_file = bold_file_path,
+    no_bold_output_file = no_bold_file_path
+  )
+}
+
+```
+
+
+# Supplementary Table 1: Differences in pRF parameters across early visual cortex
+```{r}
+S.Table1_V1V2V3 <- list(
+  list(
+    data = df.centers,
+    formula = centerX ~ group*ROI*hemi + (1|sub),
+    filters = retinotopyLMM_filters,
+    analysis_name = "LMM: pRF centers X-position (Age Group)"
+  ),
+    list(
+    data = df.centers,
+    formula = centerY ~ group*ROI*hemi + (1|sub),
+    filters = retinotopyLMM_filters,
+    analysis_name = "LMM: pRF centers Y-position (Age Group)"
+  ),
+    list(
+    data = df.centers,
+    formula = centerR ~ group*ROI*hemi + (1|sub),
+    filters = retinotopyLMM_filters,
+    analysis_name = "LMM: pRF centers Eccentricity (Age Group)"
+  ),
+    list(
+    data = df.centers,
+    formula = size ~ group*ROI*hemi + (1|sub),
+    filters = retinotopyLMM_filters,
+    analysis_name = "LMM: pRF size (Age Group)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table1_V1V2V3,
+  file_path = output_directory,
+  file_name = "S.Table1_V1V2V3",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 2: Relationship between pRF size v eccentricity
+```{r}
+S.Table2_sizeVecc <- list(
+  list(
+    data = df.sizeEcc_ret,
+    formula = slope ~ group*ROI*hemi + (1|sub),
+    filters = NULL,
+    analysis_name = "LMM: Size v. Ecc Slopes"
+  ),
+  list(
+    data = df.sizeEcc_ret,
+    formula = intercept ~ group*ROI*hemi + (1|sub),
+    filters = NULL,
+    analysis_name = "LMM: Size v. Ecc Intercepts"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table2_sizeVecc,
+  file_path = output_directory,
+  file_name = "S.Table2_sizeVecc_slopes_intercepts",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 3: Participant counts for ROIs across hemispheres and age groups
+```{r}
+S.Table2_sizeVecc <- list(
+  list(
+    data = df.sizeEcc_ret,
+    formula = slope ~ group*ROI*hemi + (1|sub),
+    filters = NULL,
+    analysis_name = "LMM: Size v. Ecc Slopes"
+  ),
+  list(
+    data = df.sizeEcc_ret,
+    formula = intercept ~ group*ROI*hemi + (1|sub),
+    filters = NULL,
+    analysis_name = "LMM: Size v. Ecc Intercepts"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table2_sizeVecc,
+  file_path = output_directory,
+  file_name = "S.Table2_sizeVecc_slopes_intercepts",
+  bold_p_value = 0.05,
+  digits = 3
+)
+
+# Betas format
+output <- run_and_format_betas(
+  analysis_list = S.Table2_sizeVecc,
+  file_path = output_directory,
+  file_name = "S.Table2_sizeVecc_slopes_intercepts",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 3. Number of individuals with ROI per group
+```{r}
+# Create summary table
+summary_table <- df.CoV_cat_latdors %>%
+  na.omit() %>%
+  filter(hemi %in% c("lh", "rh")) %>%
+  group_by(ROI, hemi, group) %>%
+  summarise(N = n_distinct(subject), .groups = "drop") %>%
+  pivot_wider(
+    names_from = c(group, hemi),
+    values_from = N) %>%
+  mutate(
+    # stream label (computed from the raw ROI, before renaming) -> vertical left margin
+    Stream = dplyr::case_when(
+      ROI %in% c("pOTS_words","mOTS_words","OTS_bodies",
+                 "IOG_faces","pFus_faces","mFus_faces","CoS_places") ~ "Ventral",
+      ROI %in% c("LOS_limbs","ITG_limbs","MTG_limbs","pSTS_faces")    ~ "Lateral",
+      ROI %in% c("MOG_places","IPS_places")                          ~ "Dorsal",
+      TRUE ~ ""),
+    ROI = stringr::str_replace_all(ROI, "_", "-"),
+    ROI = stringr::str_replace_all(ROI, "limbs", "bodies"),
+    adolescents_rh = ifelse(ROI == "mOTS-words", " ", adolescents_rh),
+    Adults_rh = ifelse(ROI == "mOTS-words", " ", Adults_rh),
+    ROI = ifelse(ROI == "pSTS-faces", "pSTS-faces*", ROI),
+    ROI = ifelse(ROI == "MTG-bodies", "MTG-bodies*", ROI)) %>%
+  dplyr::relocate(Stream) %>%
+  # show each stream label only ONCE (on the middle row of its block); blank the rest
+  dplyr::group_by(Stream) %>%
+  dplyr::mutate(Stream = ifelse(dplyr::row_number() == ceiling(dplyr::n() / 2), Stream, "")) %>%
+  dplyr::ungroup()
+
+# Define headers with subcolumns for hemispheres under each measure
+# (two leading columns now: Stream + ROI)
+measure_headers <- c(
+  " " = 2, "Left Hemisphere" = 2, "Right Hemisphere" = 2)
+
+# Manually set column names
+colnames(summary_table) <- c(
+  " ", "ROI", "adolescents", "Adults", "adolescents", "Adults")
+
+# Create HTML tables
+count_table <- summary_table %>%
+  kbl(caption = "",  align=('llcccc')) %>%
+  kable_classic(full_width = F, html_font = "Calibri") %>%
+  # rotate the (single) stream label vertically WITHOUT growing the row:
+  # transform rotates after layout, so the cell's layout height stays one line
+  # and the word spills visually into the blank cells above/below.
+  column_spec(1, bold = TRUE, width = "1.6em",
+              extra_css = "white-space: nowrap; transform: rotate(-90deg); vertical-align: middle; text-align: center;") %>%
+  row_spec(7, extra_css = "padding-bottom: 30px;") %>%
+  row_spec(11, extra_css = "padding-bottom: 30px;") %>%
+  add_header_above(measure_headers, extra_css = "font-size: 10px;") %>%
+ save_kable(file = file.path(output_directory, "S.Table3_ROI_counts.png"),
+            zoom = 3,
+            density = 500)
+```
+
+# Supplementary Table 4: Differences in proportion of voxels with greater than 20% variance explained by the Toonotopy experiment
+```{r}
+S.Table4_proportionVE20 <- list(
+  list(
+    data = df.CoV_cat_latdors,
+    formula = proportion20 ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: Proportion Voxels with Variance Explained > 20%"
+  ),
+  list(
+    data = df.CoV_cat_latdors,
+    formula = proportion20 ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: Proportion Voxels with Variance Explained > 20%"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table4_proportionVE20,
+  file_path = output_directory,
+  file_name = "S.Table4_proportionVE20",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 5: Results of KS-tests
+Code run in MATLAB (toonCat_calcKSTests_bootbyROI_csv.m) to get csv
+```{r}
+library(readr)
+library(gt)
+
+# ---- 1) Load ----
+df <- read_csv("../data/KS_bootstrap_allResults.csv", show_col_types = FALSE)
+
+# ---- 2) Row label "ROI - category" (handles faces/bodies/places/words/limbs) ----
+df <- df %>%
+  mutate(
+    roi_noprefix = sub("^(lh|rh)\\.", "", ROI, perl = TRUE),
+    base_roi     = sub("_(faces|bodies|places|words|limbs).*", "", roi_noprefix, perl = TRUE),
+    cat_tok      = tolower(sub(".*_(faces|bodies|places|words|limbs).*", "\\1", roi_noprefix, perl = TRUE)),
+    has_cat      = grepl("_(faces|bodies|places|words|limbs)", roi_noprefix, perl = TRUE),
+    label        = ifelse(has_cat, paste0(base_roi, " - ", cat_tok), base_roi)
+  )
+
+# ---- 3) Split to LH/RH and carry Bonferroni thresholds; join side-by-side ----
+lhs <- df %>%
+  filter(hemi == "lh") %>%
+  transmute(
+    param, label,
+    L_thr   = p_thresh_stream,
+    LH_Mean = KS_effect_mean,
+    # CI with two decimals now; keep raw numbers here for clean formatting
+    LH_CI_lo = KS_effect_CI_low,
+    LH_CI_hi = KS_effect_CI_high,
+    LH_p     = p_value_KS_bootstrap
+  )
+
+rhs <- df %>%
+  filter(hemi == "rh") %>%
+  transmute(
+    param, label,
+    R_thr   = p_thresh_stream,
+    RH_Mean = KS_effect_mean,
+    RH_CI_lo = KS_effect_CI_low,
+    RH_CI_hi = KS_effect_CI_high,
+    RH_p     = p_value_KS_bootstrap
+  )
+
+wide <- full_join(lhs, rhs, by = c("param","label"))
+
+# ---- 4) Enforce requested ROI order (rows) ----
+roi_order <- c(
+  "pOTS - words","mOTS - words","OTS - bodies","IOG - faces",
+  "pFus - faces","mFus - faces","CoS - places","LOS - limbs",
+  "ITG - limbs","MTG - limbs","pSTS - faces","MOG - places","IPS - places"
+)
+wide <- wide %>%
+  mutate(label = factor(label, levels = roi_order))
+
+# ---- 5) Optional: explicit parameter order ----
+param_order <- c("X","Y","eccen","size")
+wide$param <- factor(wide$param, levels = intersect(param_order, unique(wide$param)))
+wide <- wide %>% arrange(param, label)
+
+# ---- 6) Formatting helpers ----
+# big, bold markers (no HTML)
+star_char <- "\u2731"  # ✱ heavy asterisk
+dot_char  <- "\u25CF"  # ● black circle (bold "dot")
+thin_sp   <- "\u2009"  # thin space
+
+fmt_ci2    <- function(lo, hi) sprintf("(%.2f, %.2f)", lo, hi)
+fmt_p_sci2 <- function(x, mark = "", digits = 2) {
+  ifelse(
+    is.na(x), "—",
+    paste0(formatC(x, format = "e", digits = digits),
+           ifelse(mark == "", "", paste0(thin_sp, mark)))
+  )
+}
+
+wide <- wide %>%
+  mutate(
+    # significance: star if Bonferroni; dot if < .05 but not Bonferroni
+    LH_mark = dplyr::case_when(!is.na(LH_p) & LH_p < L_thr ~ star_char,
+                               !is.na(LH_p) & LH_p < 0.05  ~ star_char,
+                               TRUE                         ~ ""),
+    RH_mark = dplyr::case_when(!is.na(RH_p) & RH_p < R_thr ~ star_char,
+                               !is.na(RH_p) & RH_p < 0.05  ~ star_char,
+                               TRUE                         ~ ""),
+    LH_CI_fmt = fmt_ci2(LH_CI_lo, LH_CI_hi),
+    RH_CI_fmt = fmt_ci2(RH_CI_lo, RH_CI_hi),
+    LH_p_fmt  = fmt_p_sci2(LH_p, LH_mark, digits = 2),
+    RH_p_fmt  = fmt_p_sci2(RH_p, RH_mark, digits = 2)
+  )
+
+# ---- 7) Keep ONLY display columns ----
+wide_tbl <- wide %>%
+  select(
+    param, label,
+    LH_Mean, LH_CI_fmt, LH_p_fmt,
+    RH_Mean, RH_CI_fmt, RH_p_fmt
+  )
+
+# ---- 8) GT table: Hemisphere → Metric; center everything ----
+tab <- wide_tbl %>%
+  gt(groupname_col = "param", rowname_col = "label") %>%
+  tab_spanner(label = "Left hemisphere",  columns = c(LH_Mean, LH_CI_fmt, LH_p_fmt)) %>%
+  tab_spanner(label = "Right hemisphere", columns = c(RH_Mean, RH_CI_fmt, RH_p_fmt)) %>%
+  cols_label(
+    LH_Mean = "Mean KS (D)", LH_CI_fmt = "95% CI", LH_p_fmt = "Bootstrap p",
+    RH_Mean = "Mean KS (D)", RH_CI_fmt = "95% CI", RH_p_fmt = "Bootstrap p",
+    label   = "ROI - category"
+  ) %>%
+  fmt_number(columns = c(LH_Mean, RH_Mean), decimals = 3) %>%  # means at 3 decimals
+  cols_align("center", columns = everything()) %>%
+  tab_style(style = cell_text(align = "center"), locations = cells_stub()) %>%
+  tab_options(
+    table.font.names = c("Helvetica","Arial"),
+    table.font.size  = px(12),
+    column_labels.font.weight = "bold",
+    data_row.padding = px(4),
+    column_labels.border.top.color = "black",
+    column_labels.border.bottom.color = "black"
+  )
+
+tab <- tab %>%
+  tab_source_note(
+    source_note = md(
+      "✱ Bonferroni-corrected significance (bootstrap *p* < stream threshold)<br>
+      Stream thresholds: Ventral = 0.0038; Lateral/Dorsal = 0.0042"
+    )
+  ) %>%
+  tab_options(source_notes.font.size = px(11))
+
+
+# ---- 9) Save ----
+file_name = "S.Table5_KSTest_boostrap"
+gtsave(tab, file.path(output_directory, paste0(file_name, ".png")), vwidth = 1800, vheight = 1800)
+gtsave(tab, file.path(output_directory, paste0(file_name, ".pdf")))
+```
+
+
+# Supplementary Table 6: Differences in pRF y-position
+```{r}
+S.Table6_pRFcenters_Y <- list(
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerY ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF centers Y-position (Age Group)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerY ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF centers Y-position (Age Group)"
+  ),
+    list(
+    data = df.centers_cat_latdors,
+    formula = centerY ~ age*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF centers Y-position (Age Continuous)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerY ~ age*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF centers Y-position (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table6_pRFcenters_Y,
+  file_path = output_directory,
+  file_name = "S.Table6_pRFcenters_Y",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 7: Differences in pRF eccentricity
+```{r}
+S.Table7_pRFcenters_eccentricity <- list(
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerR ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF centers Eccentricity (Age Group)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerR ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF centers Eccentricity (Age Group)"
+  ),
+    list(
+    data = df.centers_cat_latdors,
+    formula = centerR ~ age*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF centers Eccentricity (Age Continuous)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = centerR ~ age*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF centers Eccentricity (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table7_pRFcenters_eccentricity,
+  file_path = output_directory,
+  file_name = "S.Table7_pRFcenters_eccentricity",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 8: Differences in pRF size
+```{r}
+S.Table8_pRFcenters_size <- list(
+  list(
+    data = df.centers_cat_latdors,
+    formula = size ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF Size (Age Group)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = size ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF Size (Age Group)"
+  ),
+    list(
+    data = df.centers_cat_latdors,
+    formula = size ~ age*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: pRF Size (Age Continuous)"
+  ),
+  list(
+    data = df.centers_cat_latdors,
+    formula = size ~ age*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: pRF Size (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table8_pRFcenters_size,
+  file_path = output_directory,
+  file_name = "S.Table8_pRFcenters_size",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 9: Differences in VFC FWHM
+```{r}
+S.Table9_FWHM <- list(
+  list(
+    data = df.CoV_cat_latdors,
+    formula = fwhm ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: Total FWHM (Age Group)"
+  ),
+  list(
+    data = df.CoV_cat_latdors,
+    formula = fwhm ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: Total FWHM (Age Group)"
+  ),
+  list(
+    data = df.CoV_cat_latdors,
+    formula = fwhm ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: Total FWHM (Age Continuous)"
+  ),
+  list(
+    data = df.CoV_cat_latdors,
+    formula = fwhm ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: Total FWHM (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table9_FWHM,
+  file_path = output_directory,
+  file_name = "S.Table9_FWHM",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 10: Development of category selectivity (ROI size)
+```{r}
+S.Table10_catSelectivity_ROIsize <- list(
+  list(
+    data = df.ROIsize_cat_latdors,
+    formula = totalvox ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: ROI Size (Age Group)"
+  ),
+  list(
+    data = df.ROIsize_cat_latdors,
+    formula = totalvox ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: ROI Size (Age Group)"
+  ),
+    list(
+    data = df.ROIsize_cat_latdors,
+    formula = totalvox ~ age*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: ROI Size (Age Continuous)"
+  ),
+  list(
+    data = df.ROIsize_cat_latdors,
+    formula = totalvox ~ age*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: ROI Size (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table10_catSelectivity_ROIsize,
+  file_path = output_directory,
+  file_name = "S.Table10_catSelectivity_ROIsize",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 11: ROI Size betas
+```{r}
+# output <- run_and_format_betas(
+#   analysis_list = S.Table10_catSelectivity_ROIsize,
+#   file_path = output_directory,
+#   file_name = "S.Table11_catSelectivity_ROIsize",
+#   bold_p_value = 0.05,
+#   digits = 3
+# )
+
+# # Run model and get emmeans (betas)
+# ROIsize_emm <- df.ROIsize_cat_latdors %>%
+#   lmer(totalvox ~ group * category + (1|sub), .) %>%
+#   emmeans(., ~ group | category)
+# 
+# # Pairwise comparison of adult and adolescent means
+# betas <- pairs(ROIsize_emm, by = "category", reverse = TRUE) %>%
+#   as.data.frame() %>%
+#   mutate(
+#     estimate = round(estimate, 3),
+#     SE = round(SE, 3),
+#     df = round(df, 1),
+#     t.ratio = round(t.ratio, 3),
+#     p.value = ifelse(p.value < 0.0001,
+#                format(p.value, scientific = TRUE, digits = 3),
+#                format(round(p.value, 3), nsmall = 3)),
+#     Sig = ifelse(p.value < 0.05, "*", "")
+#   ) 
+# 
+# # Format table
+# betas_table <- betas %>%
+#   gt() %>%
+#   cols_label(
+#     category = "Category",
+#     contrast = "Group Contrast",
+#     estimate = "β",
+#     SE = "SE",
+#     df = "df",
+#     t.ratio = "t",
+#     p.value = "p-value",
+#     Sig = ""
+#   ) %>%
+#   tab_style(
+#     style = list(cell_text(weight = "bold")),
+#     locations = cells_body(columns = Sig, rows = Sig == "*")
+#   ) %>%
+#   opt_table_font(
+#     font = list(
+#       google_font("Times"),
+#       default_fonts()
+#     )
+#   )
+# 
+# gtsave(betas_table, file.path(output_directory, "S.Table11_ROIsize_betas_emm.png"))
+
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(dplyr)
+library(gt)
+library(stringr)
+
+#---------------------------------------------------------
+# Function to run an LMM, extract betas, format nicely
+#---------------------------------------------------------
+extract_betas <- function(data, model_formula, analysis_label) {
+  
+  # 1. Run model
+  emm_obj <- data %>%
+    lmer(model_formula, .) %>%
+    emmeans(~ group | category)
+  
+  # 2. Adult - adolescent pairwise comparisons
+  betas <- pairs(emm_obj, by = "category", reverse = TRUE) %>%
+    as.data.frame() %>%
+    mutate(
+      Analysis = analysis_label,
+      estimate = round(estimate, 3),
+      SE = round(SE, 3),
+      df = round(df, 1),
+      t.ratio = round(t.ratio, 3),
+      p.value = ifelse(p.value < 0.0001,
+                       format(p.value, scientific = TRUE, digits = 3),
+                       format(round(p.value, 3), nsmall = 3)),
+      Sig = ifelse(p.value < 0.05, "*", "")
+    )
+  
+  return(betas)
+}
+
+#---------------------------------------------------------
+# Run BOTH analyses
+#---------------------------------------------------------
+
+# ✅ Analysis 1 dataset: ventral + dorsal-lateral (minus word ROIs)
+analysis1_data <- df.ROIsize_cat_latdors
+
+analysis1 <- extract_betas(
+  data = analysis1_data,
+  model_formula = totalvox ~ group * category * stream * hemi + (1|sub),
+  analysis_label = "LMM (no words)"
+)
+
+# ✅ Analysis 2 dataset: ventral only
+analysis2_data <- df.ROIsize_cat_latdors %>% filter(stream == "ventral")# <-- you must define this dataset
+
+analysis2 <- extract_betas(
+  data = analysis2_data,
+  model_formula = totalvox ~ group * category * hemi + (1|sub),
+  analysis_label = "Ventral LMM"
+)
+
+#---------------------------------------------------------
+# Combine both sets of betas into ONE clean table
+#---------------------------------------------------------
+
+all_betas <- bind_rows(analysis1, analysis2)
+
+# ✅ Order fields in logical layout
+all_betas <- all_betas %>%
+  select(
+    Analysis, category, contrast, estimate, SE, df, t.ratio, p.value, Sig
+  )
+
+#---------------------------------------------------------
+# Build a GT table (stacked by Analysis)
+#---------------------------------------------------------
+
+betas_table <- all_betas %>%
+  gt(groupname_col = "Analysis") %>%     # <-- this adds analysis headers
+  cols_label(
+    category = "Category",
+    contrast = "Group Contrast",
+    estimate = "β",
+    SE = "SE",
+    df = "df",
+    t.ratio = "t",
+    p.value = "p-value",
+    Sig = ""
+  ) %>%
+  tab_style(
+    style = list(cell_text(weight = "bold")),
+    locations = cells_body(columns = Sig, rows = Sig == "*")
+  ) %>%
+  opt_table_font(
+    font = list(
+      google_font("Times"),
+      default_fonts()
+    )
+  ) %>%
+  tab_options(
+    table.width = pct(100)
+  )
+
+#---------------------------------------------------------
+# Save to your chosen output directory
+#---------------------------------------------------------
+
+gtsave(
+  betas_table,
+  filename = file.path(output_directory, "S.Table11_All_LMM_ROIsize_emm_betas.png")
+)
+
+```
+
+# Supplementary Table 12: Development of category selectivity (mean t-value)
+```{r}
+S.Table12_catSelectivity_meanT <- list(
+  list(
+    data = df.category_latdors,
+    formula = meanT ~ group*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: Category Selectivity - Mean T-Value (Age Group)"
+  ),
+  list(
+    data = df.category_latdors,
+    formula = meanT ~ group*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: Category Selectivity - Mean T-Value  (Age Group)"
+  ),
+    list(
+    data = df.category_latdors,
+    formula = meanT ~ age*stream*category*hemi + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: Category Selectivity - Mean T-Value  (Age Continuous)"
+  ),
+  list(
+    data = df.category_latdors,
+    formula = meanT ~ age*category*hemi + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: Category Selectivity - Mean T-Value  (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table12_catSelectivity_meanT,
+  file_path = output_directory,
+  file_name = "S.Table12_catSelectivity_meanT",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 13: Relationship between ROI Size and FWHM
+```{r}
+S.Table13_ROIsize_FWHM <- list(
+  list(
+    data = df.ROIsize_FWHM,
+    formula = totalvox ~ fwhm*category*group + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: ROI Size v FWHM (Age Group)"
+  ),
+  list(
+    data = df.ROIsize_FWHM,
+    formula = totalvox ~ fwhm*category*group + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: ROI Size v FWHM (Age Group)"
+  ),
+    list(
+    data = df.ROIsize_FWHM,
+    formula = totalvox ~ fwhm*category*age + (1|sub),
+    filters = LMM_filters,
+    analysis_name = "LMM: ROI Size v FWHM (Age Continuous)"
+  ),
+  list(
+    data = df.ROIsize_FWHM,
+    formula = totalvox ~ fwhm*category*age + (1|sub),
+    filters = ventralLMM_filters,
+    analysis_name = "Ventral LMM: ROI Size v FWHM (Age Continuous)"
+  )
+)
+
+# Run the function
+output <- run_and_format_analysis(
+  analysis_list = S.Table13_ROIsize_FWHM,
+  file_path = output_directory,
+  file_name = "S.Table13_ROIsize_FWHM",
+  bold_p_value = 0.05,
+  digits = 3
+)
+```
+
+# Supplementary Table 14: Sample-size-matched bootstrap of age-group effects (Figure 3 pRF parameters)
+The adult and adolescent groups differ in size. Although the LMMs (S.Tables 6-8) already account for unequal group sizes, we additionally ran a subsample-matching bootstrap as a robustness check: on each iteration the larger (adult) group is randomly subsampled — at the **participant level**, keeping all of each subject's ROI/hemi rows together — to match the adolescent N, the Figure 3 LMM is refit, and **every age-group term — the group main effect and all of its interactions (group:stream, group:category, group:hemi, and higher-order)** — is recorded. Across iterations we report, per term, the median F and p, the 95% bootstrap interval of p, and the proportion of subsamples in which that term is significant (p < .05). A high proportion significant for the interactions that drive the Figure 3 results (e.g. group:category for ROI size and mean t) indicates the effect is not an artifact of the sample-size imbalance.
+
+```{r stable14-bootstrap, echo=FALSE, out.width="100%"}
+knitr::include_graphics(c(
+  "~/Documents/projects/toonCat/analysis/results/revision/S.Table14_fig3_bootstrap_all.png",
+  "~/Documents/projects/toonCat/analysis/results/revision/S.Table14_fig3_bootstrap_ventral.png"))
+```
+
+## (Computed previously in this Rmd; compute chunks disabled — displaying saved PNGs above)
+```{r boot-fig3-fn, eval=FALSE}
+library(emmeans)
+
+# Subject-level subsample-matching bootstrap of the age-group main effect.
+# Mirrors the S.Table 6-8 LMM (group*stream*category*hemi + (1|sub)).
+run_bootstrap_group <- function(data, response, filters,
+                                B = 1000, seed = 1,
+                                group_var = "group", id_var = "sub",
+                                rhs = "group*stream*category*hemi") {
+  fdata <- data %>%
+    dplyr::filter(!!!rlang::parse_exprs(filters)) %>%
+    tidyr::drop_na()
+
+  ids   <- fdata %>% dplyr::distinct(.data[[id_var]], .data[[group_var]])
+  adol  <- ids %>% dplyr::filter(.data[[group_var]] == "adolescents") %>% dplyr::pull(.data[[id_var]])
+  adult <- ids %>% dplyr::filter(.data[[group_var]] == "Adults")      %>% dplyr::pull(.data[[id_var]])
+  n     <- length(adol)
+  form  <- as.formula(paste0(response, " ~ ", rhs, " + (1|", id_var, ")"))
+
+  # named vectors of joint-test F ratios / p-values for ALL group terms (main effect + interactions)
+  gstats <- function(d) {
+    m  <- suppressWarnings(suppressMessages(lmerTest::lmer(form, data = d)))
+    jt <- emmeans::joint_tests(m)
+    keep <- grepl("group", jt[["model term"]])
+    list(F = setNames(as.numeric(jt$F.ratio[keep]), jt[["model term"]][keep]),
+         p = setNames(as.numeric(jt$p.value[keep]), jt[["model term"]][keep]))
+  }
+  gterms <- names(gstats(fdata)$F)   # group main effect + interactions
+
+  set.seed(seed)
+  boot <- lapply(seq_len(B), function(b) {
+    keep <- c(adol, sample(adult, n, replace = FALSE))   # subsample adults to adolescent N
+    d    <- fdata %>% dplyr::filter(.data[[id_var]] %in% keep)
+    tryCatch(gstats(d), error = function(e) NULL)
+  })
+  boot <- boot[!vapply(boot, is.null, logical(1))]
+
+  # one row per group term, summarising the bootstrap distribution of F and p
+  purrr::map_dfr(gterms, function(tm) {
+    Fv <- vapply(boot, function(x) if (tm %in% names(x$F)) x$F[[tm]] else NA_real_, numeric(1))
+    pv <- vapply(boot, function(x) if (tm %in% names(x$p)) x$p[[tm]] else NA_real_, numeric(1))
+    Fv <- Fv[!is.na(Fv)]; pv <- pv[!is.na(pv)]
+    tibble(
+      Measure     = response,
+      Term        = tm,
+      n_per_group = n,
+      n_boot      = length(pv),
+      median_F    = median(Fv),
+      median_p    = median(pv),
+      p_CI        = sprintf("[%.3f, %.3f]", quantile(pv, .025), quantile(pv, .975)),
+      prop_sig    = mean(pv < 0.05)
+    )
+  })
+}
+```
+
+```{r boot-fig3-run-all, eval=FALSE}
+# "all" ROIs: full model group*stream*category*hemi (ventral + lateral-dorsal)
+boot_fig3 <- bind_rows(
+  run_bootstrap_group(df.centers_cat_latdors, "centerY",  LMM_filters),
+  run_bootstrap_group(df.centers_cat_latdors, "centerR",  LMM_filters),
+  run_bootstrap_group(df.centers_cat_latdors, "size",     LMM_filters),
+  run_bootstrap_group(df.CoV_cat_latdors,     "fwhm",     LMM_filters),
+  run_bootstrap_group(df.ROIsize_cat_latdors, "totalvox", LMM_filters),
+  run_bootstrap_group(df.category_latdors,    "meanT",    LMM_filters)
+)
+boot_fig3
+```
+
+
+```{r boot-fig3-run-ventral, eval=FALSE}
+# ventral-only: group*category*hemi (mirrors the ventral LMM in S.Tables 6-8)
+boot_fig3_ventral <- bind_rows(
+  run_bootstrap_group(df.centers_cat_latdors, "centerY",  ventralLMM_filters, rhs = "group*category*hemi"),
+  run_bootstrap_group(df.centers_cat_latdors, "centerR",  ventralLMM_filters, rhs = "group*category*hemi"),
+  run_bootstrap_group(df.centers_cat_latdors, "size",     ventralLMM_filters, rhs = "group*category*hemi"),
+  run_bootstrap_group(df.CoV_cat_latdors,     "fwhm",     ventralLMM_filters, rhs = "group*category*hemi"),
+  run_bootstrap_group(df.ROIsize_cat_latdors, "totalvox", ventralLMM_filters, rhs = "group*category*hemi"),
+  run_bootstrap_group(df.category_latdors,    "meanT",    ventralLMM_filters, rhs = "group*category*hemi")
+)
+boot_fig3_ventral
+```
+
+```{r boot-fig3-table, eval=FALSE}
+# format + save a bootstrap table in BOTH a bolded (sig rows = median p < 0.05) and a plain version,
+# mirroring run_and_format_analysis: bold -> <dir>/bold/<name>_bold.png, plain -> <dir>/<name>.png
+boot_kable <- function(boot_df, caption, file_path, file_name) {
+  d <- boot_df %>%
+    mutate(Measure = recode(Measure,
+                            centerY  = "pRF Y-position", centerR = "Eccentricity",
+                            size     = "pRF Size",       fwhm    = "VFC FWHM",
+                            totalvox = "ROI Size (selectivity)", meanT = "Mean t (selectivity)"),
+           sig      = median_p < 0.05,
+           median_F = round(median_F, 3),
+           median_p = formatC(median_p, format = "f", digits = 3),
+           prop_sig = paste0(round(100 * prop_sig, 1), "%")) %>%
+    group_by(Measure) %>% mutate(Measure = ifelse(row_number() == 1, Measure, "")) %>% ungroup()
+  build <- function(bold) {
+    k <- d %>% select(-sig) %>%
+      kbl(col.names = c("Measure", "Term", "N/group", "N boot", "Median F",
+                        "Median p", "95% CI (p)", "% significant"),
+          align = "llcccccc", caption = caption) %>%
+      kable_classic(full_width = FALSE, html_font = "Calibri")
+    if (bold) k <- k %>% row_spec(which(d$sig), bold = TRUE)
+    k
+  }
+  dir.create(file.path(file_path, "bold"), recursive = TRUE, showWarnings = FALSE)
+  save_kable(build(TRUE),  file.path(file_path, "bold", paste0(file_name, "_bold.png")), zoom = 3, density = 500)
+  save_kable(build(FALSE), file.path(file_path, paste0(file_name, ".png")),              zoom = 3, density = 500)
+  build(TRUE)   # return bolded version for inline display
+}
+
+boot_tbl <- boot_kable(boot_fig3,
+  "Subsample-matched bootstrap of age-group effects — all ROIs (main effect and interactions; adults matched to adolescent N)",
+  output_directory, "S.Table14_fig3_bootstrap_all")
+boot_tbl
+
+boot_tbl_ventral <- boot_kable(boot_fig3_ventral,
+  "Subsample-matched bootstrap of age-group effects — ventral ROIs (main effect and interactions; adults matched to adolescent N)",
+  output_directory, "S.Table14_fig3_bootstrap_ventral")
+boot_tbl_ventral
+```
+
+# Supplementary Table 15: Subsampled-100-voxel LMM of pRF properties and coverage
+Robustness reproduction of the Figure 3/4 LMMs with every ROI subsampled to exactly 100 voxels (equating ROI size across regions, hemispheres, and groups). Computed in `toonCat_subsampled100vox.Rmd`; here we display the saved table.
+```{r stable15-subsampled, echo=FALSE, out.width="100%"}
+knitr::include_graphics("~/Documents/projects/toonCat/analysis/results/revision/subsampled100vox/S.Table_subsampled100vox_pRF_LMM.png")
+```
+
+## (Not used in current numbering) Label-permutation test of age-group effects
+Empirical null built by shuffling age-group labels across participants and refitting the Figure 3 LMM; retained for reference but not included in the numbered supplementary tables (chunks disabled below).
+
+```{r perm-fn}
+# Subject-level label-permutation test of ALL age-group terms (main effect + interactions).
+# Shuffles `group` across participants (group sizes preserved), refits the LMM, and
+# compares each observed group-term F to its permuted null. One row per group term.
+run_permutation_group <- function(data, response, filters,
+                                  P = 1000, seed = 1,
+                                  group_var = "group", id_var = "sub",
+                                  rhs = "group*stream*category*hemi") {
+  fdata <- data %>%
+    dplyr::filter(!!!rlang::parse_exprs(filters)) %>%
+    tidyr::drop_na()
+  form <- as.formula(paste0(response, " ~ ", rhs, " + (1|", id_var, ")"))
+
+  # named vector of joint-test F ratios (names = model terms)
+  Fvec <- function(d) {
+    m  <- suppressWarnings(suppressMessages(lmerTest::lmer(form, data = d)))
+    jt <- emmeans::joint_tests(m)
+    setNames(as.numeric(jt$F.ratio), jt[["model term"]])
+  }
+
+  obs    <- Fvec(fdata)
+  gterms <- names(obs)[grepl("group", names(obs))]   # main effect + interactions
+
+  key <- fdata %>% dplyr::distinct(.data[[id_var]], .data[[group_var]])
+  set.seed(seed)
+  null_list <- lapply(seq_len(P), function(p) {
+    permkey <- key
+    permkey[[group_var]] <- sample(permkey[[group_var]])
+    d <- fdata %>%
+      dplyr::select(-dplyr::all_of(group_var)) %>%
+      dplyr::left_join(permkey, by = id_var)
+    tryCatch(Fvec(d), error = function(e) setNames(numeric(0), character(0)))
+  })
+
+  purrr::map_dfr(gterms, function(tm) {
+    nullF <- vapply(null_list,
+                    function(v) if (tm %in% names(v)) v[[tm]] else NA_real_,
+                    numeric(1))
+    nullF <- nullF[!is.na(nullF)]
+    Fobs  <- obs[[tm]]
+    tibble(
+      Measure  = response,
+      Term     = tm,
+      F_obs    = Fobs,
+      perm_p   = (sum(nullF >= Fobs) + 1) / (length(nullF) + 1),
+      null_F95 = unname(quantile(nullF, .95)),
+      n_perm   = length(nullF)
+    )
+  })
+}
+```
+
+```{r perm-run, eval=FALSE}
+perm_fig3 <- bind_rows(
+  run_permutation_group(df.centers_cat_latdors, "centerY",  LMM_filters),
+  run_permutation_group(df.centers_cat_latdors, "centerR",  LMM_filters),
+  run_permutation_group(df.centers_cat_latdors, "size",     LMM_filters),
+  run_permutation_group(df.CoV_cat_latdors,     "fwhm",     LMM_filters),
+  run_permutation_group(df.ROIsize_cat_latdors, "totalvox", LMM_filters),
+  run_permutation_group(df.category_latdors,    "meanT",    LMM_filters)
+)
+perm_fig3
+```
+
+```{r perm-table, eval=FALSE}
+perm_tbl <- perm_fig3 %>%
+  mutate(
+    Measure  = recode(Measure,
+                      centerY  = "pRF Y-position",
+                      centerR  = "Eccentricity",
+                      size     = "pRF Size",
+                      fwhm     = "VFC FWHM",
+                      totalvox = "ROI Size (selectivity)",
+                      meanT    = "Mean t (selectivity)"),
+    F_obs    = round(F_obs, 3),
+    perm_p   = formatC(perm_p, format = "f", digits = 3),
+    null_F95 = round(null_F95, 3)
+  ) %>%
+  select(Measure, Term, F_obs, perm_p, null_F95, n_perm) %>%
+  kbl(col.names = c("Measure", "Term", "Observed F",
+                    "Permutation p", "Null F (95th pct)", "N perm"),
+      align = "llccc",
+      caption = "Label-permutation test of age-group terms (group labels shuffled across participants)") %>%
+  kable_classic(full_width = FALSE, html_font = "Calibri")
+
+save_kable(perm_tbl, file = file.path(output_directory, "S.Table15_fig3_permutation.png"),
+           zoom = 3, density = 500)
+perm_tbl
+```
+
+
+# Supplementary Table 16: KS-tests of pRF model fit (R2) between adolescents and adults
+Per-ROI, per-hemisphere bootstrapped KS-tests comparing the distribution of pRF variance explained (R2) between adolescents and adults, confirming that pRF model fit does not systematically differ across groups. Reads the KS results computed in the noise-analysis pipeline (`results/revision/toonCat_kstest_r2_results.csv`).
+```{r stable16-r2-ks, echo=FALSE, out.width="100%"}
+knitr::include_graphics("~/Documents/projects/toonCat/analysis/results/revision/S.Table16_KStest_r2.png")
+```
+
+## (Table generated by toonCat_stable16_r2_ci.R — bootstrap 95% CI on the KS D, matching S. Table 5. The disabled chunk below is a superseded per-group draft.)
+```{r stable16-r2-ks-old, eval=FALSE}
+library(gt); library(tidyr)
+star_char <- "✱"; thin_sp <- " "
+
+fmt_ci <- function(m, lo, hi) sprintf("%.3f (%.3f, %.3f)", m, lo, hi)
+
+ks_r2 <- read.csv("~/Documents/projects/toonCat/analysis/results/revision/toonCat_kstest_r2_results.csv") %>%
+  mutate(
+    base_roi   = sub("_(faces|bodies|places|words|limbs).*", "", roi, perl = TRUE),
+    cat_tok    = tolower(sub(".*_(faces|bodies|places|words|limbs).*", "\\1", roi, perl = TRUE)),
+    label      = paste0(base_roi, " - ", cat_tok),
+    Hemisphere = ifelse(hemi == "lh", "Left hemisphere", "Right hemisphere"),
+    R2_adol    = fmt_ci(mean_r2_kids,   ci95_lo_kids,   ci95_hi_kids),
+    R2_adult   = fmt_ci(mean_r2_adults, ci95_lo_adults, ci95_hi_adults),
+    p_fmt      = paste0(sprintf("%.3f", p_boot), ifelse(p_boot < 0.05, paste0(thin_sp, star_char), ""))
+  )
+
+roi_order <- c("pOTS - words","mOTS - words","OTS - bodies","IOG - faces",
+               "pFus - faces","mFus - faces","CoS - places","LOS - limbs",
+               "ITG - limbs","MTG - limbs","pSTS - faces","MOG - places","IPS - places")
+
+tab16 <- ks_r2 %>%
+  mutate(label = factor(label, levels = roi_order),
+         Hemisphere = factor(Hemisphere, levels = c("Left hemisphere","Right hemisphere"))) %>%
+  arrange(Hemisphere, label) %>%
+  select(Hemisphere, label, R2_adol, R2_adult, ks_stat, p_fmt) %>%
+  gt(groupname_col = "Hemisphere", rowname_col = "label") %>%
+  cols_label(
+    R2_adol  = "Adolescents R² (95% CI)",
+    R2_adult = "Adults R² (95% CI)",
+    ks_stat  = "KS D",
+    p_fmt    = "Bootstrap p",
+    label    = "ROI - category"
+  ) %>%
+  fmt_number(columns = ks_stat, decimals = 3) %>%
+  cols_align("center", columns = everything()) %>%
+  tab_style(style = cell_text(align = "center"), locations = cells_stub()) %>%
+  tab_options(
+    table.font.names = c("Helvetica","Arial"),
+    table.font.size  = px(12),
+    column_labels.font.weight = "bold",
+    row_group.font.weight = "bold",
+    data_row.padding = px(4),
+    column_labels.border.top.color = "black",
+    column_labels.border.bottom.color = "black"
+  ) %>%
+  tab_source_note(source_note = md(
+    "R² is the mean variance explained by the pRF model per group (95% CI). ✱ *p* < 0.05 (uncorrected); no region survives correction for multiple comparisons."
+  )) %>%
+  tab_options(source_notes.font.size = px(11))
+
+gtsave(tab16, file.path(output_directory, "S.Table16_KStest_r2.png"), vwidth = 2000, vheight = 2000)
+gtsave(tab16, file.path(output_directory, "S.Table16_KStest_r2.pdf"))
+tab16
+```
+

@@ -8,7 +8,7 @@
 ###################################################################################################################
 
 # Working Directory
-setwd('./code')
+setwd('/Users/jewelia/Documents/projects/toonCat/analysis/code')
 
 # Load libraries
 library(tidyverse)

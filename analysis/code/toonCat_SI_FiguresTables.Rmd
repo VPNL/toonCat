@@ -10,10 +10,10 @@ Supplementary tables and figures, in order of reference, for the toonCat manuscr
 
 ```{r Setup, warning=F, message=F, echo=FALSE}
 # Setup file
-source("~./code/toonCat_analysisSetup.R")
+source("~/Documents/projects/toonCat/analysis/code/toonCat_analysisSetup.R")
 
 # Set global variables
-output_directory <- "./results/supplementary/"
+output_directory <- "~/Documents/projects/toonCat/analysis/results/pnas/supplementary/"
 LMM_filters <- c("hemi != 'mh'", "hemi != 'zh'", "ROI != 'blank'","ROI != 'blank1'", "category != 'word'", "category != 'words'")
 ventralLMM_filters <- c("hemi != 'mh'", "hemi != 'zh'", "ROI != 'blank'","ROI != 'blank1'", "stream == 'ventral'")
 retinotopyLMM_filters <- c("ROI %in% c('V1', 'V2', 'V3')", "hemi != 'mh'", "hemi != 'zh'")
@@ -957,7 +957,7 @@ extract_betas <- function(data, model_formula, analysis_label) {
 # Run BOTH analyses
 #---------------------------------------------------------
 
-# Analysis 1 dataset: ventral + dorsal-lateral (minus word ROIs)
+# ✅ Analysis 1 dataset: ventral + dorsal-lateral (minus word ROIs)
 analysis1_data <- df.ROIsize_cat_latdors
 
 analysis1 <- extract_betas(
@@ -966,7 +966,7 @@ analysis1 <- extract_betas(
   analysis_label = "LMM (no words)"
 )
 
-# Analysis 2 dataset: ventral only
+# ✅ Analysis 2 dataset: ventral only
 analysis2_data <- df.ROIsize_cat_latdors %>% filter(stream == "ventral")# <-- you must define this dataset
 
 analysis2 <- extract_betas(
@@ -981,7 +981,7 @@ analysis2 <- extract_betas(
 
 all_betas <- bind_rows(analysis1, analysis2)
 
-# Order fields in logical layout
+# ✅ Order fields in logical layout
 all_betas <- all_betas %>%
   select(
     Analysis, category, contrast, estimate, SE, df, t.ratio, p.value, Sig

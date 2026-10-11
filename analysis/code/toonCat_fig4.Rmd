@@ -7,8 +7,8 @@ output: html_document
 
 # SETUP
 ```{r Setup}
-source("./code/toonCat_analysisSetup.R")
-output_directory <- "./results/figures/fig4"
+source("~/Documents/projects/toonCat/analysis/code/toonCat_analysisSetup.R")
+output_directory <- "~/Documents/projects/toonCat/analysis/results/figures/fig4"
 ```
 
 ```{r Plot Setup}
@@ -256,18 +256,17 @@ p <- df.plot %>%
       fill = fill_key,
       alpha = stream)
 ) +
-  geom_violin(position = position_dodge(width = 0.8),
-              na.rm = TRUE, colour = NA) +          # no outline, fill-only
+  geom_bar(stat = "summary", fun = "mean",
+           position = position_dodge(width = 0.8),
+           width = 0.7, na.rm = TRUE, colour = NA) +  # mean bar, fill-only
   # --- Points: always Adults color for that ROI's category ---
   geom_point(
     aes(colour = point_col),
     position = position_dodge(width = 0.8),
     size = 1, alpha = 1, show.legend = FALSE
   ) +
-  stat_summary(fun = mean, geom = "point", color = "black", size = 1.5,
-               position = position_dodge(width = 0.8)) +
-  stat_summary(fun.data = mean_se, geom = "errorbar", color = "black", width = 1,
-               position = position_dodge(width = 0.8)) +
+  # stat_summary(fun = mean, geom = "point", color = "black", size = 1.5,
+  #              position = position_dodge(width = 0.8)) +
   labs(y = "Total FWHM (°)") +
   facet_grid(~ ROI, drop = FALSE) +
   geom_hline(yintercept = 0)+

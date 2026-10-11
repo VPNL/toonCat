@@ -1,0 +1,462 @@
+---
+title: "toonCat_subsampled100vox"
+author: "Jewelia K. Yao"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+Robustness reproduction of the Figure 3/4 and supplementary-table analyses using ROIs
+**subsampled to exactly 100 voxels** (equating ROI size across ROIs, hemispheres, and groups).
+Mirrors `toonCat_fig3.Rmd`, `toonCat_fig4.Rmd`, and `toonCat_supplementaryTables.Rmd`, but with
+`df.centers_cat` / `df.CoV_cat_latdors` rebuilt from the subsampled files.
+
+NOT computable on subsampled data (and therefore omitted): **Fig 5 ROI size** (`totalvox` is fixed
+at 100 by construction), **category selectivity / mean t** (not in the subsampled files), and the
+ROI-size ray of the **Fig 6** fingerprint. `pSTS_faces` and `MTG_limbs` are absent (no subject
+reaches 100 voxels), so the lateral-dorsal stream has no face ROI.
+
+# SETUP
+```{r Setup, warning=F, message=F}
+source("~/Documents/projects/toonCat/analysis/code/toonCat_analysisSetup.R")
+output_directory <- "~/Documents/projects/toonCat/analysis/results/revision/subsampled100vox"
+dir.create(output_directory, recursive = TRUE, showWarnings = FALSE)
+
+library(emmeans); library(lmerTest)
+ss_dir <- "~/Documents/projects/toonCat/analysis/data/subsampled100vox"
+```
+
+```{r Plot Setup}
+# Colors (from fig3/fig4)
+new_colors_face  <- c("#FF0000","#8B0000")
+new_colors_body  <- c("#E4CD04","#BA8E23")
+new_colors_place <- c("#008000","#013220")
+new_colors_words <- c("#0000FF","#000066")
+dodge <- position_dodge2(width = 1, preserve = "single", padding = 0)
+```
+
+```{r Build subsampled data objects}
+# Rebuild df.centers_cat / df.CoV_cat_latdors from the subsampled-100 files, in the SAME schema
+# as toonCat_analysisSetup.R, enforcing nVoxels == 100 on every included cell.
+centers_ss <- read.csv(file.path(ss_dir, "pRFCenters_subsampled100_toonCat.csv"))
+cov_ss     <- read.csv(file.path(ss_dir, "pRFCoverage_subsampled100_toonCat.csv"))
+
+# pSTS_faces / MTG_limbs appear under two atlases; use adultAvg (as in the standard
+# lateralROIs_pSTS_MTG_AdultAvg data) so each subject x ROI x hemi is a single 100-voxel cell.
+pick_atlas <- function(d) d %>%
+  filter(!(ROI %in% c("pSTS_faces", "MTG_limbs") & atlas != "adultAvg_probMap_toonCat"))
+
+df.centers_cat <- centers_ss %>%
+  pick_atlas() %>%
+  filter(nVoxels >= 100) %>%
+  transmute(sub = sub('.*/', '', subject), hemi,
+            group   = factor(ifelse(group == "KidsTeens", "adolescents", "Adults"),
+                             levels = c("adolescents", "Adults")),
+            ROI     = factor(ROI, levels = roi_order_cat),
+            centerX = CenterX, centerY = CenterY, centerR = sqrt(CenterX^2 + CenterY^2),
+            size    = pRFSize, nVoxels) %>%
+  mutate(stream   = case_when(ROI %in% ventral_cat ~ "ventral",
+                              ROI %in% lateral_cat ~ "lateral",
+                              ROI %in% dorsal_cat  ~ "dorsal"),
+         category = case_when(ROI %in% roi_order_face   ~ "face",
+                              ROI %in% roi_order_word   ~ "word",
+                              ROI %in% roi_order_bodies ~ "body",
+                              ROI %in% roi_order_place  ~ "place")) %>%
+  filter(!(ROI == "mOTS_words" & hemi == "rh"))
+
+# ventral/lateral-dorsal version (for LMMs / fig4), matching df.*_cat_latdors
+df.CoV_cat_latdors <- cov_ss %>%
+  pick_atlas() %>%
+  filter(includedvox >= 100) %>%
+  transmute(sub = sub('.*/', '', subject), hemi,
+            group = factor(ifelse(group == "KidsTeens", "adolescents", "Adults"),
+                           levels = c("adolescents", "Adults")),
+            ROI   = factor(ROI, levels = roi_order_cat),
+            fwhm  = fwhm_cov) %>%
+  mutate(stream   = case_when(ROI %in% ventral_cat ~ "ventral",
+                              ROI %in% lateral_dorsal_cat ~ "lateraldorsal"),
+         category = case_when(ROI %in% roi_order_face   ~ "face",
+                              ROI %in% roi_order_word   ~ "word",
+                              ROI %in% roi_order_bodies ~ "body",
+                              ROI %in% roi_order_place  ~ "place")) %>%
+  filter(!(ROI == "mOTS_words" & hemi == "rh"))
+
+# centers in latdors stream coding too (for the LMM tables)
+df.centers_cat_latdors <- df.centers_cat %>%
+  mutate(stream = case_when(ROI %in% ventral_cat ~ "ventral",
+                            ROI %in% lateral_dorsal_cat ~ "lateraldorsal"))
+
+stopifnot(all(df.centers_cat$nVoxels == 100))
+```
+
+```{r Helper functions, copied from fig3/fig4 and supplementaryTables}
+# --- per ROI x hemi Welch t-tests (fig3/fig4) ---
+perform_and_save_t_tests <- function(data, group_var, measure_var, output_file_base = NULL) {
+  data_filtered <- data %>%
+    filter(hemi %in% c("lh","rh"), !(ROI %in% c("blank","blank1"))) %>% na.omit()
+  split_data <- split(data_filtered, list(data_filtered$hemi, data_filtered$ROI))
+  perform_t_test <- function(df) {
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+    a <- df %>% filter(!!sym(group_var) == "adolescents") %>% pull(!!sym(measure_var))
+    b <- df %>% filter(!!sym(group_var) == "Adults")      %>% pull(!!sym(measure_var))
+    if (length(a) > 1 & length(b) > 1) {
+      tt <- t.test(a, b, var.equal = FALSE)
+      tibble(hemi = unique(df$hemi), ROI = unique(df$ROI),
+             t_statistic = unname(tt$statistic), p_value = unname(tt$p.value),
+             df = unname(tt$parameter), mean_adolescents = mean(a, na.rm = TRUE),
+             mean_Adults = mean(b, na.rm = TRUE))
+    } else NULL
+  }
+  res <- map_dfr(split_data, perform_t_test)
+  if (!is.null(output_file_base) && nrow(res)) {
+    write_csv(res, paste0(output_file_base, "_all.csv"))
+    write_csv(res %>% mutate(p_adj = p.adjust(p_value, "BH")) %>% filter(p_adj < 0.05),
+              paste0(output_file_base, "_sig.csv"))
+  }
+  res
+}
+p_to_stars <- function(p) dplyr::case_when(is.na(p)~"", p<0.001~"***", p<0.01~"**", p<0.05~"*", TRUE~"")
+build_star_tbl <- function(tt_res, y_top) tt_res %>%
+  mutate(p_adj = p.adjust(p_value, method = "BH"),          # FDR across ROI x hemi (per measure)
+         stars = p_to_stars(p_adj), lab = stars, x = paste0("Adults.", hemi), y = y_top) %>%
+  filter(lab != "")
+
+# --- supplement-style LMM joint-test table (copied from toonCat_supplementaryTables.Rmd) ---
+library(kableExtra); library(knitr)
+LMM_filters         <- c("hemi != 'mh'","hemi != 'zh'","ROI != 'blank'","ROI != 'blank1'","category != 'word'","category != 'words'")
+ventralLMM_filters  <- c("hemi != 'mh'","hemi != 'zh'","ROI != 'blank'","ROI != 'blank1'","stream == 'ventral'")
+
+run_and_format_analysis <- function(analysis_list, file_path, file_name, bold_p_value = 0.05, digits = 3) {
+  run_LMM_analysis <- function(data, formula, filters = NULL, analysis_name) {
+    filtered_data <- if (!is.null(filters) && length(filters) > 0)
+      data %>% filter(!!!rlang::parse_exprs(filters)) %>% na.omit() else data %>% na.omit()
+    model   <- suppressMessages(suppressWarnings(lmerTest::lmer(formula, data = filtered_data)))
+    joint_tests(model) %>% mutate(Analysis = analysis_name)
+  }
+  combined_results <- bind_rows(lapply(analysis_list, function(a)
+    run_LMM_analysis(a$data, a$formula, a$filters, a$analysis_name)))
+
+  format_and_save_table <- function(results, file_path, bold_p = TRUE, bold_p_value, digits) {
+    format_p <- function(p) ifelse(p < 0.0001, format(p, scientific = TRUE, digits = 4), format(p, nsmall = 3))
+    format_F <- function(Fval) format(Fval, nsmall = digits)
+    formatted_results <- results %>%
+      mutate(p.value = as.numeric(p.value), p.value = sapply(p.value, format_p),
+             F.ratio = sapply(F.ratio, format_F)) %>%
+      select(Analysis, everything()) %>%
+      group_by(Analysis) %>% mutate(Analysis = ifelse(row_number() == 1, Analysis, "")) %>% ungroup()
+    add_space_rows <- which(formatted_results$Analysis != "")
+    table <- formatted_results %>% kable(format = "html", booktabs = TRUE, digits = digits) %>%
+      kable_classic(full_width = FALSE, html_font = "Calibri")
+    for (row in add_space_rows[-1]) table <- table %>% row_spec(row, extra_css = "border-top: 10px solid white;")
+    if (bold_p) table <- table %>% row_spec(which(as.numeric(formatted_results$p.value) < bold_p_value), bold = TRUE)
+    save_kable(table, file = file_path, zoom = 3, density = 500)
+    formatted_results
+  }
+
+  dir.create(file.path(file_path, "bold"), recursive = TRUE, showWarnings = FALSE)
+  format_and_save_table(combined_results, file.path(file_path, "bold", paste0(file_name, "_bold.png")),
+                        TRUE,  bold_p_value, digits)
+  format_and_save_table(combined_results, file.path(file_path, paste0(file_name, ".png")),
+                        FALSE, bold_p_value, digits)
+  combined_results
+}
+```
+
+# COUNTS — subjects per group × ROI × hemisphere
+Number of participants contributing a 100-voxel cell, by group, ROI, and hemisphere
+(every cell has exactly 100 voxels; `mOTS_words` is left-hemisphere only).
+```{r counts-table}
+counts_ROIhemi <- df.centers_cat %>%
+  mutate(ROI = factor(ROI, levels = roi_order_cat)) %>%
+  count(ROI, hemi, group) %>%
+  tidyr::unite("hemi_grp", hemi, group) %>%
+  pivot_wider(names_from = hemi_grp, values_from = n, values_fill = 0) %>%
+  select(ROI, any_of(c("lh_adolescents","lh_Adults","rh_adolescents","rh_Adults"))) %>%
+  arrange(ROI)
+
+counts_tbl <- counts_ROIhemi %>%
+  kbl(col.names = c("ROI", "lh adolescents", "lh Adults", "rh adolescents", "rh Adults"),
+      align = "lcccc",
+      caption = "Subsampled-100: N participants per ROI × hemisphere × group") %>%
+  kable_classic(full_width = FALSE, html_font = "Calibri")
+save_kable(counts_tbl, file = file.path(output_directory, "subsampled100vox_counts_byROIhemiGroup.png"),
+           zoom = 3, density = 500)
+counts_tbl
+```
+
+# FIGURE 3 — pRF centers (Y-position, eccentricity, pRF size)
+Bars = group mean, points = participants; x = group.hemi, faceted by ROI within each category.
+(`pSTS_faces` / `MTG_limbs` absent, so the face/body panels have no lateral ROI.)
+```{r fig3 t-tests}
+# per ROI x hemi Welch t-tests (adolescents vs Adults); stars placed near the top of each panel
+tt_centerY <- perform_and_save_t_tests(df.centers_cat, "group", "centerY", file.path(output_directory, "t_centerY"))
+tt_centerR <- perform_and_save_t_tests(df.centers_cat, "group", "centerR", file.path(output_directory, "t_centerR"))
+tt_size    <- perform_and_save_t_tests(df.centers_cat, "group", "size",    file.path(output_directory, "t_size"))
+stars_centerY <- build_star_tbl(tt_centerY, y_top = 8.2)
+stars_centerR <- build_star_tbl(tt_centerR, y_top = 16)
+stars_size    <- build_star_tbl(tt_size,    y_top = 23.5)
+```
+
+```{r fig3 plot function}
+domain_cols <- list(face = new_colors_face, body = new_colors_body, place = new_colors_place)
+# Reproduces the fig3 bar style for one category x measure. Saves a PNG if `fname` is given.
+# `data` lets the same panel be reused for coverage (FWHM); `show_y` drops the y-axis for grid columns 2+.
+fig3_bar <- function(measure, cat, ylab, ylim, ybreaks, fname = NULL,
+                     data = df.centers_cat, show_y = TRUE, stars = NULL) {
+  cols <- domain_cols[[cat]]
+  cat_rois <- unique(as.character(data$ROI[data$category == cat]))
+  p <- data %>% filter(category == cat) %>%
+    mutate(ROI = factor(ROI, levels = roi_order_cat)) %>%
+    ggplot(aes(x = interaction(group, hemi, sep = "."), y = .data[[measure]],
+               fill = group, alpha = stream)) +
+    geom_bar(stat = "summary", fun = "mean", width = 0.8, position = dodge, linewidth = 1) +
+    geom_point(size = 1, na.rm = TRUE, color = cols[2]) +
+    geom_hline(yintercept = 0) +
+    facet_grid(~ ROI) +
+    scale_fill_manual(values = cols, na.translate = FALSE) +
+    scale_color_manual(values = cols, na.translate = FALSE) +
+    scale_alpha_manual(values = c("ventral" = 0.85, "lateral" = 0.5, "dorsal" = 0.5, "lateraldorsal" = 0.5)) +
+    scale_y_continuous(breaks = ybreaks, limits = ylim) +
+    labs(y = ylab) +
+    theme(legend.position = "none", strip.background = element_blank(), strip.text.x = element_blank(),
+          panel.spacing = unit(0, "null"), panel.grid.major.y = element_line(color = "gray96", linewidth = 0.5),
+          axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+          axis.line.x = element_line(color = "white"), text = element_text(family = "Avenir"))
+  # significance asterisks above bars (per ROI x hemi), for this category only
+  if (!is.null(stars)) {
+    s <- stars %>% filter(ROI %in% cat_rois) %>% mutate(ROI = factor(ROI, levels = roi_order_cat))
+    if (nrow(s)) p <- p + geom_text(data = s, aes(x = x, y = y, label = lab),
+                                    inherit.aes = FALSE, size = 5, vjust = 0.5)
+  }
+  if (!show_y) p <- p + theme(axis.title.y = element_blank(), axis.text.y = element_blank(),
+                              axis.ticks.y = element_blank())
+  if (!is.null(fname)) ggsave(file.path(output_directory, fname), p, width = 4, height = 3, dpi = 300)
+  p
+}
+```
+
+```{r fig3 Y-position, fig.width=12, fig.height=3}
+fig3_bar("centerY", "body",  "Y Position (°)", c(-9,9), seq(-8,8,4), "F3_yPosition_body.png",  stars = stars_centerY)
+fig3_bar("centerY", "face",  "Y Position (°)", c(-9,9), seq(-8,8,4), "F3_yPosition_face.png",  stars = stars_centerY)
+fig3_bar("centerY", "place", "Y Position (°)", c(-9,9), seq(-8,8,4), "F3_yPosition_place.png", stars = stars_centerY)
+```
+
+```{r fig3 eccentricity, fig.width=12, fig.height=3}
+fig3_bar("centerR", "body",  "Eccentricity (°)", c(0,17), seq(0,16,4), "F3_ecc_body.png",  stars = stars_centerR)
+fig3_bar("centerR", "face",  "Eccentricity (°)", c(0,17), seq(0,16,4), "F3_ecc_face.png",  stars = stars_centerR)
+fig3_bar("centerR", "place", "Eccentricity (°)", c(0,17), seq(0,16,4), "F3_ecc_place.png", stars = stars_centerR)
+```
+
+```{r fig3 pRF size, fig.width=12, fig.height=3}
+fig3_bar("size", "body",  "pRF Size (°)", c(0,25), seq(0,24,4), "F3_size_body.png",  stars = stars_size)
+fig3_bar("size", "face",  "pRF Size (°)", c(0,25), seq(0,24,4), "F3_size_face.png",  stars = stars_size)
+fig3_bar("size", "place", "pRF Size (°)", c(0,25), seq(0,24,4), "F3_size_place.png", stars = stars_size)
+```
+
+# FIGURE 4 — VFC FWHM (violins, exactly as in toonCat_fig4.Rmd)
+Replicates the Figure 4 violin style and ROI order (words → bodies → faces → places), with
+hemisphere as facet rows (lh top, rh bottom), group on x, mean ± SE and significance stars.
+mOTS_words is kept (left hemisphere only). Built on the subsampled-100 coverage data.
+```{r fig4 FWHM, fig.width=12, fig.height=3}
+library(ggh4x)
+
+# Fig 4 ROI order (NOT roi_order_cat)
+roi_order_fig4 <- c("pOTS_words","mOTS_words","OTS_bodies",
+                    "IOG_faces","pFus_faces","mFus_faces",
+                    "CoS_places","blank","LOS_limbs","ITG_limbs",
+                    "MTG_limbs","pSTS_faces","blank1","MOG_places","IPS_places")
+
+df.plot <- df.CoV_cat_latdors %>%
+  mutate(
+    ROI   = factor(stringr::str_trim(as.character(ROI)), levels = roi_order_fig4),
+    group = factor(group, levels = c("adolescents","Adults")),
+    hemi  = factor(hemi,  levels = c("lh","rh","zh")),
+    category = case_when(
+      grepl("_faces$",  ROI)                        ~ "faces",
+      grepl("_words$",  ROI)                        ~ "words",
+      grepl("_places$", ROI)                        ~ "places",
+      grepl("(_bodies$|_limbs$|^OTS_bodies$)", ROI) ~ "bodies",
+      ROI %in% c("blank","blank1")                  ~ "blank",
+      TRUE                                          ~ "other"),
+    fill_key  = interaction(category, group, sep = "."),
+    point_col = case_when(category == "faces"  ~ "#8B0000", category == "bodies" ~ "#BA8E23",
+                          category == "places" ~ "#013220", category == "words"  ~ "#000066",
+                          TRUE ~ "#7f7f7f"))
+
+fill_pal <- c("faces.adolescents"="#FF0000","faces.Adults"="#8B0000",
+              "bodies.adolescents"="#E4CD04","bodies.Adults"="#BA8E23",
+              "places.adolescents"="#008000","places.Adults"="#013220",
+              "words.adolescents"="#0000FF","words.Adults"="#000066",
+              "blank.adolescents"="#FFFFFF","blank.Adults"="#FFFFFF")
+
+# significance stars (uncorrected p; x = group since hemisphere is now a facet row)
+tt_fwhm <- perform_and_save_t_tests(df.CoV_cat_latdors, "group", "fwhm", file.path(output_directory, "t_fwhm"))
+sig_tbl_fwhm <- tt_fwhm %>%
+  mutate(stars = p_to_stars(p_value), lab = stars,
+         x = "Adults", y = 39,                                  # over the Adults violin
+         hemi = factor(hemi, levels = c("lh", "rh"))) %>%
+  filter(lab != "")
+
+# hemispheres as facet ROWS (lh top, rh bottom); mOTS_words kept (lh only -> empty rh panel)
+p <- df.plot %>%
+  filter(hemi %in% c("lh","rh")) %>%
+  mutate(hemi = factor(hemi, levels = c("lh","rh"))) %>%
+  ggplot(aes(x = group, y = fwhm, fill = fill_key, alpha = stream)) +
+  geom_violin(na.rm = TRUE, colour = NA) +
+  geom_point(aes(colour = point_col), size = 1, alpha = 1, show.legend = FALSE) +
+  stat_summary(fun = mean, geom = "point", color = "black", size = 1.5) +
+  stat_summary(fun.data = mean_se, geom = "errorbar", color = "black", width = 0.4) +
+  labs(y = "Total FWHM (°)") +
+  facet_grid(hemi ~ ROI, drop = FALSE) +
+  geom_hline(yintercept = 0) +
+  theme(legend.position = "none", strip.background = element_blank(), strip.text.x = element_blank(),
+        strip.text.y = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 16), panel.spacing = unit(4, "mm"),
+        panel.grid.major.y = element_line(color = "gray96", linewidth = 0.5),
+        axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        axis.text.y = element_text(size = 15), text = element_text(family = "Avenir"),
+        plot.margin = margin(5.5, 0, 5.5, 5.5),
+        axis.line.x = element_line(color = "white", linewidth = 0.6),
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background  = element_rect(fill = "white", color = NA)) +
+  scale_alpha_manual(values = c("lateraldorsal" = 0.5, "ventral" = .75)) +
+  scale_fill_manual(values = fill_pal, limits = names(fill_pal), drop = FALSE, na.translate = FALSE) +
+  scale_colour_identity() +
+  scale_y_continuous(breaks = seq(0, 40, 10), limits = c(0, 40))
+
+rel_widths <- ifelse(levels(df.plot$ROI) %in% c("blank","blank1"), 0.45, 1)
+p_stars <- p +
+  geom_text(data = sig_tbl_fwhm %>% mutate(ROI = factor(ROI, levels = levels(df.plot$ROI))),
+            aes(x = x, y = y, label = lab), inherit.aes = FALSE,
+            family = "Avenir", fontface = "bold", size = 8)
+
+p_fwhm <- p_stars + ggh4x::force_panelsizes(cols = unit(rel_widths, "null"))
+ggsave(file.path(output_directory, "F4_FWHM.png"), p_fwhm, width = 14, height = 5.5, dpi = 300)
+p_fwhm
+```
+
+# GRID — subsampled pRF properties (Y-position, eccentricity, pRF size)
+One row per measure; ROIs in the manuscript Fig. 3A stream order
+(Ventral: pOTS, OTS, IOG, pFus, mFus, CoS | Lateral: LOS, ITG, MTG, pSTS | Dorsal: MOG, IPS),
+both hemispheres, fig4-style fill (light = adolescents, dark = Adults). Asterisks = significant
+group difference (FDR). FWHM is shown separately as violins, not in this grid.
+```{r grid, fig.width=14, fig.height=10}
+library(patchwork); library(ggh4x)
+
+# manuscript Fig 3A ROI order (blank/blank1 separate ventral|lateral|dorsal); mOTS excluded
+roi_order_grid <- c("pOTS_words","OTS_bodies","IOG_faces","pFus_faces","mFus_faces","CoS_places",
+                    "blank","LOS_limbs","ITG_limbs","MTG_limbs","pSTS_faces",
+                    "blank1","MOG_places","IPS_places")
+fill_pal <- c("faces.adolescents"="#FF0000","faces.Adults"="#8B0000",
+              "bodies.adolescents"="#E4CD04","bodies.Adults"="#BA8E23",
+              "places.adolescents"="#008000","places.Adults"="#013220",
+              "words.adolescents"="#0000FF","words.Adults"="#000066",
+              "blank.adolescents"="#FFFFFF","blank.Adults"="#FFFFFF")
+
+df.grid <- df.centers_cat %>%
+  mutate(ROI   = factor(as.character(ROI), levels = roi_order_grid),
+         hemi  = factor(hemi, levels = c("lh","rh")),
+         category = case_when(grepl("_faces$",ROI)~"faces", grepl("_words$",ROI)~"words",
+                              grepl("_places$",ROI)~"places",
+                              grepl("(_bodies$|_limbs$)",ROI)~"bodies", TRUE~"other"),
+         fill_key  = interaction(category, group, sep = "."),
+         point_col = case_when(category=="faces"~"#8B0000", category=="bodies"~"#BA8E23",
+                               category=="places"~"#013220", category=="words"~"#000066", TRUE~"#7f7f7f")) %>%
+  filter(!is.na(ROI), ROI != "mOTS_words")
+
+rel_widths <- ifelse(roi_order_grid %in% c("blank","blank1"), 0.45, 1)
+
+measure_row <- function(measure, ylab, ylim, ybreaks, stars) {
+  df.grid %>%
+    ggplot(aes(x = interaction(group, hemi, sep = "."), y = .data[[measure]],
+               fill = fill_key, alpha = stream)) +
+    geom_bar(stat = "summary", fun = "mean", position = position_dodge(width = 0.8), na.rm = TRUE) +
+    geom_point(aes(colour = point_col), position = position_dodge(width = 0.8),
+               size = 0.7, alpha = 1, show.legend = FALSE) +
+    geom_hline(yintercept = 0) +
+    geom_text(data = stars %>% mutate(ROI = factor(ROI, levels = roi_order_grid)) %>% filter(!is.na(ROI)),
+              aes(x = x, y = max(ybreaks), label = lab), inherit.aes = FALSE,
+              family = "Avenir", fontface = "bold", size = 6) +
+    facet_grid(~ ROI, drop = FALSE) +
+    scale_fill_manual(values = fill_pal, limits = names(fill_pal), drop = FALSE, na.translate = FALSE) +
+    scale_alpha_manual(values = c("ventral" = 0.85, "lateraldorsal" = 0.5)) +
+    scale_colour_identity() +
+    scale_y_continuous(breaks = ybreaks, limits = ylim) +
+    labs(y = ylab) +
+    ggh4x::force_panelsizes(cols = unit(rel_widths, "null")) +
+    theme(legend.position = "none", strip.background = element_blank(), strip.text.x = element_blank(),
+          panel.spacing = unit(2, "mm"), panel.grid.major.y = element_line(color = "gray96", linewidth = 0.5),
+          axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+          axis.line.x = element_line(color = "white"), text = element_text(family = "Avenir"),
+          panel.background = element_rect(fill = "white", color = NA))
+}
+
+grid_all <-
+  measure_row("centerY", "Y Position (°)",   c(-9, 9), seq(-8, 8, 4), stars_centerY) /
+  measure_row("centerR", "Eccentricity (°)", c(0, 17), seq(0, 16, 4), stars_centerR) /
+  measure_row("size",    "pRF Size (°)",     c(0, 25), seq(0, 24, 4), stars_size)
+
+ggsave(file.path(output_directory, "subsampled100vox_pRFproperties_grid.png"),
+       grid_all, width = 14, height = 10, dpi = 300)
+grid_all
+```
+
+# GRID — actual pRF center (polar) + coverage PNGs, per group
+Montages the per-ROI PNGs in `centers/{group}` and `coverage/{group}` in the manuscript stream order
+(Ventral: pOTS, OTS, IOG, pFus, mFus, CoS | Lateral: LOS, ITG, MTG, pSTS | Dorsal: MOG, IPS).
+Centers are one row per ROI; coverage has **lh on top, rh on bottom**. (pSTS/MTG use the adultAvg
+atlas; centers are per-ROI with no hemisphere split.) Uses the ImageMagick `montage` CLI.
+```{r png-grids}
+roi_order <- c("pOTS_words","OTS_bodies","IOG_faces","pFus_faces","mFus_faces","CoS_places",
+               "LOS_limbs","ITG_limbs","MTG_limbs","pSTS_faces","MOG_places","IPS_places")
+ncol_grid <- length(roi_order)   # 12 ROIs in stream order
+montage_bin <- Sys.which("montage")
+
+pick_png <- function(dir, prefix) {
+  f <- list.files(dir, pattern = paste0("^", prefix, "_.*adultAvg.*\\.png$"), full.names = TRUE)  # pSTS/MTG
+  if (!length(f)) f <- list.files(dir, pattern = paste0("^", prefix, "_.*\\.png$"), full.names = TRUE)
+  if (length(f)) f[1] else NA_character_
+}
+make_png_grid <- function(type, group) {
+  d <- file.path(output_directory, type, group)
+  if (type == "centers") {                       # one polar plot per ROI -> single stream-ordered row
+    files <- na.omit(vapply(roi_order, function(r) pick_png(d, r), character(1)))
+    tile  <- paste0(ncol_grid, "x1")
+  } else {                                        # coverage: lh row (top), rh row (bottom)
+    files <- c(na.omit(vapply(roi_order, function(r) pick_png(d, paste0("lh_", r)), character(1))),
+               na.omit(vapply(roi_order, function(r) pick_png(d, paste0("rh_", r)), character(1))))
+    tile  <- paste0(ncol_grid, "x2")
+  }
+  out <- file.path(output_directory, paste0("grid_", type, "_", group, ".png"))
+  system2(montage_bin, c(shQuote(files), "-tile", tile, "-geometry", "+5+5",
+                         "-label", "%f", "-pointsize", "12", "-background", "white", shQuote(out)))
+  out
+}
+if (nzchar(montage_bin)) {
+  for (g in c("KidsTeens", "Adults")) { make_png_grid("centers", g); make_png_grid("coverage", g) }
+  message("wrote grid_centers/coverage_{KidsTeens,Adults}.png to ", output_directory)
+} else message("ImageMagick 'montage' not found on PATH; skipping PNG grids.")
+```
+
+# SUPPLEMENTARY TABLES — LMM joint tests on subsampled ROIs
+Full model `~ group*stream*category*hemi + (1|sub)` (estimable group terms only — the full design
+is rank-deficient because the lateral-dorsal stream lacks a face ROI) and the ventral-only model.
+```{r supp LMM table}
+supp_analyses <- list(
+  list(data = df.centers_cat_latdors, formula = centerY ~ group*stream*category*hemi + (1|sub), filters = LMM_filters,        analysis_name = "pRF Y-position"),
+  list(data = df.centers_cat_latdors, formula = centerY ~ group*category*hemi        + (1|sub), filters = ventralLMM_filters, analysis_name = "pRF Y-position (ventral)"),
+  list(data = df.centers_cat_latdors, formula = centerR ~ group*stream*category*hemi + (1|sub), filters = LMM_filters,        analysis_name = "Eccentricity"),
+  list(data = df.centers_cat_latdors, formula = centerR ~ group*category*hemi        + (1|sub), filters = ventralLMM_filters, analysis_name = "Eccentricity (ventral)"),
+  list(data = df.centers_cat_latdors, formula = size    ~ group*stream*category*hemi + (1|sub), filters = LMM_filters,        analysis_name = "pRF Size"),
+  list(data = df.centers_cat_latdors, formula = size    ~ group*category*hemi        + (1|sub), filters = ventralLMM_filters, analysis_name = "pRF Size (ventral)"),
+  list(data = df.CoV_cat_latdors,     formula = fwhm    ~ group*stream*category*hemi + (1|sub), filters = LMM_filters,        analysis_name = "VFC FWHM"),
+  list(data = df.CoV_cat_latdors,     formula = fwhm    ~ group*category*hemi        + (1|sub), filters = ventralLMM_filters, analysis_name = "VFC FWHM (ventral)")
+)
+run_and_format_analysis(supp_analyses, file_path = output_directory,
+                        file_name = "S.Table_subsampled100vox_pRF_LMM")
+```
+
+# NOT COMPUTABLE on subsampled-100 data
+- **Fig 5 (ROI size):** `totalvox` is fixed at 100 by construction — no variance to test.
+- **Category selectivity / mean t (S.Tables 11-14):** selectivity is not stored in the subsampled files.
+- **Fig 6 fingerprint:** the ROI-size and selectivity rays are not available; the Y/Ecc/Size/FWHM
+  rays could be drawn from the objects above if desired.

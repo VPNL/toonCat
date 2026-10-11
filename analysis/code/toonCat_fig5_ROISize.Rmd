@@ -6,8 +6,8 @@ output: html_document
 ---
 
 ```{r Setup}
-source("./code/toonCat_analysisSetup.R")
-output_directory <- "./results/figures/fig5"
+source("~/Documents/projects/toonCat/analysis/code/toonCat_analysisSetup.R")
+output_directory <- "~/Documents/projects/toonCat/analysis/results/figures/fig5"
 ```
 
 

@@ -12,6 +12,12 @@ output_directory <- "~/Documents/projects/toonCat/analysis/results/figures/fig5"
 
 
 ```{r Plot Setup}
+# Points: darken ventral-stream dots (alpha .87) so they show up against their bars
+darken_ventral <- function(fill, alpha, amount = 0.35) {
+  dark <- grDevices::rgb(t(grDevices::col2rgb(fill) * (1 - amount)), maxColorValue = 255)
+  ifelse(alpha > 0.8, dark, fill)
+}
+
 # Colors
 new_colors_face <- c("#FF0000","#8B0000")
 new_colors_body <- c("#E4CD04","#BA8E23")
@@ -93,7 +99,7 @@ t_faces <- df.ROIsize_cat_latdors %>%
                 fill = group, 
                 alpha = stream)) +
   geom_bar(stat = "summary", width = 0.8, fun = "mean", size = 1) +
-  geom_point(size = 0.5, na.rm = TRUE,  color = "#8B0000") +
+  geom_point(aes(fill = stage(group, after_scale = darken_ventral(fill, alpha)), alpha = stage(stream, after_scale = ifelse(alpha > 0.8, alpha, 0.6))), size = 1.5, na.rm = TRUE, shape = 21, stroke = 0) +
   labs(y = "ROI Size (# Voxels)") +
   facet_grid(~ ROI) +
   theme(legend.position = "none",
@@ -110,7 +116,7 @@ t_faces <- df.ROIsize_cat_latdors %>%
         axis.line.x = element_line(color = "white")) +
   geom_hline(yintercept = 0) +
   scale_color_manual(values = new_colors_face, na.translate = FALSE) +
-  scale_alpha_manual(values = c("lateraldorsal" = 0.45, "ventral" = .85)) +
+  scale_alpha_manual(values = c("lateraldorsal" = 0.7, "ventral" = .87)) +
   scale_fill_manual(values = new_colors_face, na.translate = FALSE) +
   scale_y_continuous(breaks = seq(0, 2500, 500), limits = c(0, 2700)) +
   theme(axis.line=element_blank(),axis.text.x=element_blank(),
@@ -136,7 +142,7 @@ t_bodies <- df.ROIsize_cat_latdors %>%
                 fill = group, 
                 alpha = stream)) +
   geom_bar(stat = "summary", width = 0.8,fun = "mean", size = 1) +
-  geom_point(size = 0.5, na.rm = TRUE, color = "#BA8E23") +
+  geom_point(aes(fill = stage(group, after_scale = darken_ventral(fill, alpha)), alpha = stage(stream, after_scale = ifelse(alpha > 0.8, alpha, 0.6))), size = 1.5, na.rm = TRUE, shape = 21, stroke = 0) +
   labs(y = "ROI Size (# Voxels)") +
   facet_grid(~ ROI) +
   theme(legend.position = "none",
@@ -153,7 +159,7 @@ t_bodies <- df.ROIsize_cat_latdors %>%
         axis.line.x = element_line(color = "white")) +
   geom_hline(yintercept = 0) +
   scale_color_manual(values = new_colors_body, na.translate = FALSE) +
-  scale_alpha_manual(values = c("lateraldorsal" = 0.45, "ventral" = .85)) +
+  scale_alpha_manual(values = c("lateraldorsal" = 0.7, "ventral" = .87)) +
   scale_fill_manual(values = new_colors_body, na.translate = FALSE) +
   scale_y_continuous(breaks = seq(0, 2500, 500), limits = c(0, 2700)) +
   theme(axis.line=element_blank(),axis.text.x=element_blank(),
@@ -180,7 +186,7 @@ t_place <- df.ROIsize_cat_latdors %>%
                 fill = group, 
                 alpha = stream)) +
   geom_bar(stat = "summary", width = 0.8,fun = "mean", size = 1) +
-  geom_point(size = 0.5, na.rm = TRUE, color = "#013220") +
+  geom_point(aes(fill = stage(group, after_scale = darken_ventral(fill, alpha)), alpha = stage(stream, after_scale = ifelse(alpha > 0.8, alpha, 0.6))), size = 1.5, na.rm = TRUE, shape = 21, stroke = 0) +
   labs(y = "ROI Size (# Voxels)") +
   facet_grid(~ ROI) +
   theme(legend.position = "none",
@@ -197,7 +203,7 @@ t_place <- df.ROIsize_cat_latdors %>%
         axis.line.x = element_line(color = "white")) +
   geom_hline(yintercept = 0) +
   scale_color_manual(values = new_colors_place, na.translate = FALSE) +
-  scale_alpha_manual(values = c("lateraldorsal" = 0.45, "dorsal" = 0.45, "ventral" = .85)) +
+  scale_alpha_manual(values = c("lateraldorsal" = 0.7, "dorsal" = 0.7, "ventral" = .87)) +
   scale_fill_manual(values = new_colors_place, na.translate = FALSE) +
   scale_y_continuous(breaks = seq(0, 2500, 500), limits = c(0, 2700)) +
   theme(axis.line=element_blank(),axis.text.x=element_blank(),
@@ -223,7 +229,7 @@ t_words <- df.ROIsize_cat_latdors %>%
                 fill = group, 
                 alpha = stream)) +
   geom_bar(stat = "summary", width = 0.8, fun = "mean", size = 1) +
-  geom_point(size = 0.5, na.rm = TRUE, color = "#000066") +
+  geom_point(aes(fill = stage(group, after_scale = darken_ventral(fill, alpha)), alpha = stage(stream, after_scale = ifelse(alpha > 0.8, alpha, 0.6))), size = 1.5, na.rm = TRUE, shape = 21, stroke = 0) +
   labs(y = "ROI Size (# Voxels)") +
   facet_grid(~ ROI) +
   theme(legend.position = "none",
@@ -240,7 +246,7 @@ t_words <- df.ROIsize_cat_latdors %>%
         axis.line.x = element_line(color = "white")) +
   geom_hline(yintercept = 0) +
   scale_color_manual(values = new_colors_words, na.translate = FALSE) +
-  scale_alpha_manual(values = c("lateraldorsal" = 0.45, "ventral" = .85)) +
+  scale_alpha_manual(values = c("lateraldorsal" = 0.7, "ventral" = .87)) +
   scale_fill_manual(values = new_colors_words, na.translate = FALSE) +
   scale_y_continuous(breaks = seq(0, 2500, 500), limits = c(0, 2700))
 

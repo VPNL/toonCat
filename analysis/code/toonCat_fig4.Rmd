@@ -12,6 +12,12 @@ output_directory <- "~/Documents/projects/toonCat/analysis/results/figures/fig4"
 ```
 
 ```{r Plot Setup}
+# Points: darken ventral-stream dots (alpha .87) so they show up against their bars
+darken_ventral <- function(fill, alpha, amount = 0.35) {
+  dark <- grDevices::rgb(t(grDevices::col2rgb(fill) * (1 - amount)), maxColorValue = 255)
+  ifelse(alpha > 0.8, dark, fill)
+}
+
 roi_order_all <- c("pOTS_words","mOTS_words","OTS_bodies",
                    "IOG_faces","pFus_faces","mFus_faces",
                    "CoS_places","blank","LOS_limbs","ITG_limbs",
@@ -34,11 +40,11 @@ df.plot <- df.CoV_cat_latdors %>%
     fill_key  = interaction(category, group, sep = "."),
     # Adults color per category for points (used below)
     point_col = case_when(
-      category == "faces"  ~ "#8B0000",
-      category == "bodies" ~ "#BA8E23",
-      category == "places" ~ "#013220",
-      category == "words"  ~ "#000066",
-      TRUE                 ~ "#7f7f7f"
+      category == "faces"  ~ "#5C0000",
+      category == "bodies" ~ "#7A5A0E",
+      category == "places" ~ "#001A0F",
+      category == "words"  ~ "#00003D",
+      TRUE                 ~ "#4D4D4D"
     )
   )
 
@@ -134,6 +140,11 @@ sig_tbl_fwhm <- tt_fwhm %>%
 ```{r}
 png(file.path(output_directory, "F4_totalFWHM_violin_rh.png"), units = "in", width = 15, height = 3, res = 300)
 
+roi_order_rh <- c("pOTS_words","OTS_bodies",
+                  "IOG_faces","pFus_faces","mFus_faces",
+                  "CoS_places","blank","LOS_limbs","ITG_limbs",
+                  "MTG_limbs","pSTS_faces","blank1","MOG_places","IPS_places")
+
 df.plot <- df.CoV_cat_latdors %>%
   filter(ROI != "mOTS_words") %>%
   mutate(
@@ -151,11 +162,11 @@ df.plot <- df.CoV_cat_latdors %>%
     fill_key  = interaction(category, group, sep = "."),
     # Adults color per category for points (used below)
     point_col = case_when(
-      category == "faces"  ~ "#8B0000",
-      category == "bodies" ~ "#BA8E23",
-      category == "places" ~ "#013220",
-      category == "words"  ~ "#000066",
-      TRUE                 ~ "#7f7f7f"
+      category == "faces"  ~ "#5C0000",
+      category == "bodies" ~ "#7A5A0E",
+      category == "places" ~ "#001A0F",
+      category == "words"  ~ "#00003D",
+      TRUE                 ~ "#4D4D4D"
     )
   )
 
@@ -241,11 +252,6 @@ sig_tbl_fwhm <- tt_fwhm %>%
   filter(lab != "")
 
 # ------- 3) Figure code -------
-roi_order_rh <- c("pOTS_words","OTS_bodies",
-                  "IOG_faces","pFus_faces","mFus_faces",
-                  "CoS_places","blank","LOS_limbs","ITG_limbs",
-                  "MTG_limbs","pSTS_faces","blank1","MOG_places","IPS_places")
-
 p <- df.plot %>%
   filter(hemi %in% c("rh","zh"),
          ROI != "mOTS_words") %>%
@@ -259,11 +265,11 @@ p <- df.plot %>%
   geom_bar(stat = "summary", fun = "mean",
            position = position_dodge(width = 0.8),
            width = 0.7, na.rm = TRUE, colour = NA) +  # mean bar, fill-only
-  # --- Points: always Adults color for that ROI's category ---
+  # --- Points: bar color, ventral darkened ---
   geom_point(
-    aes(colour = point_col),
+    aes(fill = stage(fill_key, after_scale = darken_ventral(fill, alpha)), alpha = stage(stream, after_scale = ifelse(alpha > 0.8, alpha, 0.6))),
     position = position_dodge(width = 0.8),
-    size = 1, alpha = 1, show.legend = FALSE
+    size = 2, na.rm = TRUE, shape = 21, stroke = 0, show.legend = FALSE
   ) +
   # stat_summary(fun = mean, geom = "point", color = "black", size = 1.5,
   #              position = position_dodge(width = 0.8)) +
@@ -288,7 +294,7 @@ p <- df.plot %>%
     plot.background  = element_rect(fill = "white", color = NA)
   ) +
   geom_hline(yintercept = 0) +
-  scale_alpha_manual(values = c("lateraldorsal" = 0.5, "ventral" = .75)) +
+  scale_alpha_manual(values = c("lateraldorsal" = 0.7, "ventral" = .87)) +
   scale_fill_manual(values = fill_pal, limits = names(fill_pal), drop = FALSE, na.translate = FALSE) +
   scale_colour_identity() +                          # <- use hex colors as-is
   scale_y_continuous(breaks = seq(0, 40, 10), limits = c(0, 40))

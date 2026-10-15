@@ -26,6 +26,13 @@ ss_dir <- "~/Documents/projects/toonCat/analysis/data/subsampled100vox"
 ```
 
 ```{r Plot Setup}
+
+# Points: darken ventral-stream dots so they show up against their bars.
+# Ventral bars have the higher alpha here (lateral/dorsal 0.5), hence cutoff = 0.6.
+darken_ventral <- function(fill, alpha, amount = 0.35, cutoff = 0.6) {
+  dark <- grDevices::rgb(t(grDevices::col2rgb(fill) * (1 - amount)), maxColorValue = 255)
+  ifelse(alpha > cutoff, dark, fill)
+}
 # Colors (from fig3/fig4)
 new_colors_face  <- c("#FF0000","#8B0000")
 new_colors_body  <- c("#E4CD04","#BA8E23")
@@ -209,7 +216,8 @@ fig3_bar <- function(measure, cat, ylab, ylim, ybreaks, fname = NULL,
     ggplot(aes(x = interaction(group, hemi, sep = "."), y = .data[[measure]],
                fill = group, alpha = stream)) +
     geom_bar(stat = "summary", fun = "mean", width = 0.8, position = dodge, linewidth = 1) +
-    geom_point(size = 1, na.rm = TRUE, color = cols[2]) +
+    geom_point(aes(fill = stage(group, after_scale = darken_ventral(fill, alpha)), alpha = stage(stream, after_scale = ifelse(alpha > 0.6, 0.87, 0.6))),
+               size = 1.5, na.rm = TRUE, shape = 21, stroke = 0) +
     geom_hline(yintercept = 0) +
     facet_grid(~ ROI) +
     scale_fill_manual(values = cols, na.translate = FALSE) +
@@ -370,8 +378,9 @@ measure_row <- function(measure, ylab, ylim, ybreaks, stars) {
     ggplot(aes(x = interaction(group, hemi, sep = "."), y = .data[[measure]],
                fill = fill_key, alpha = stream)) +
     geom_bar(stat = "summary", fun = "mean", position = position_dodge(width = 0.8), na.rm = TRUE) +
-    geom_point(aes(colour = point_col), position = position_dodge(width = 0.8),
-               size = 0.7, alpha = 1, show.legend = FALSE) +
+    geom_point(aes(fill = stage(fill_key, after_scale = darken_ventral(fill, alpha)), alpha = stage(stream, after_scale = ifelse(alpha > 0.6, 0.87, 0.6))),
+               position = position_dodge(width = 0.8),
+               size = 1.5, na.rm = TRUE, shape = 21, stroke = 0, show.legend = FALSE) +
     geom_hline(yintercept = 0) +
     geom_text(data = stars %>% mutate(ROI = factor(ROI, levels = roi_order_grid)) %>% filter(!is.na(ROI)),
               aes(x = x, y = max(ybreaks), label = lab), inherit.aes = FALSE,
